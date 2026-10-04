@@ -1,0 +1,21 @@
+{
+  "name": "THE EYEBROW 京都駅店",
+  "short_name": "THE EYEBROW",
+  "description": "眉とまつげの専門サロン THE EYEBROW 京都駅店の公式アプリ。24時間ご予約いただけます。",
+  "lang": "ja",
+  "start_url": "./?source=app",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf7f2",
+  "theme_color": "#2b2622",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "予約する", "url": "./#book", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "マイ予約", "url": "./#mine", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
+  ]
+}

@@ -154,3 +154,65 @@ body.staff .top .logo{color:var(--bg)}
 .res{font-size:11px;border-radius:99px;padding:1px 8px;white-space:nowrap}
 .res.ok{background:#e8efe9;color:var(--ok)}
 .res.ng{background:#f7ebe8;color:var(--ng)}
+
+/* v5：お客様カルテ・売上ダッシュボード */
+.ksearch input{width:100%;border:1px solid var(--line);border-radius:99px;background:var(--paper);padding:11px 18px;font-size:15px}
+.ksearch input:focus{outline:none;border-color:var(--ink-2)}
+.kc{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;text-align:left;cursor:pointer}
+.kc b{font-family:var(--mincho);font-size:15px;font-weight:600}
+.kana{display:block;font-family:var(--sans);font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.04em}
+.khead{margin:4px 0 6px}
+.khead .ttl{margin:0 0 4px}
+.khead .kana{font-size:12px;margin-top:2px}
+.sama{font-size:14px;color:var(--muted);margin-left:4px}
+.khead a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)}
+.btn.sm{width:auto;padding:8px 16px;font-size:13px;margin-top:12px}
+.vs .dt{font-family:var(--latin);font-weight:500;font-size:20px;font-variant-numeric:lining-nums}
+.vs .dt small{font-size:12px;color:var(--muted);margin-left:6px}
+.vs .mn{font-family:var(--mincho);font-size:14.5px;margin:2px 0 8px}
+.vs .kv{margin:0}
+.vs .kv dd{white-space:pre-wrap}
+.vs .acts{margin-top:8px;text-align:right}
+.ph{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.pt{position:relative;aspect-ratio:1;border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--line-2);overflow:hidden;padding:0;cursor:pointer}
+.pt img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .2s}
+.pt.ok img{opacity:1}
+.pt span{position:absolute;left:0;right:0;bottom:0;background:rgba(38,33,32,.62);color:#fff;font-size:10px;padding:1px 0;text-align:center}
+.pt.add{display:flex;align-items:center;justify-content:center;background:var(--paper);border:1px dashed var(--line);color:var(--ink-2);font-size:12px}
+.bigph{margin:10px 0 16px;border-radius:var(--r-s);overflow:hidden;background:var(--line-2);min-height:120px;display:flex;align-items:center;justify-content:center}
+.bigph img{width:100%;display:block}
+.consent{border:1px solid var(--line-2);border-radius:var(--r);padding:12px 14px;margin:0 0 16px;background:var(--paper)}
+.consent p{margin:6px 0 0}
+.mnav{display:flex;align-items:center;justify-content:space-between;margin:-4px 0 14px}
+.mnav b{font-family:var(--mincho);font-size:16px}
+.mnav button{border:1px solid var(--line);background:var(--paper);border-radius:99px;width:40px;height:34px;font-size:18px;color:var(--ink)}
+.mnav button:disabled{opacity:.35}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{background:var(--paper);border:1px solid var(--line-2);border-radius:var(--r);padding:12px 14px}
+.tile.wide{grid-column:1/-1}
+.tile span{display:block;font-size:12px;color:var(--muted)}
+.tile b{display:block;font-family:var(--latin);font-weight:500;font-size:26px;line-height:1.25;font-variant-numeric:lining-nums}
+.tile.wide b{font-size:34px}
+.tile b small{font-size:14px;color:var(--muted)}
+.tile small{display:block;font-size:11px;color:var(--muted);line-height:1.5}
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .gl{stroke:var(--line-2);stroke-width:1}
+.chart .gl.base{stroke:var(--line)}
+.chart .yl{font-size:9.5px;fill:var(--muted);text-anchor:end;font-variant-numeric:tabular-nums}
+.chart .xl{font-size:9.5px;fill:var(--muted);text-anchor:middle}
+.chart .xl.on{fill:var(--ink);font-weight:600}
+.chart .bar{fill:var(--brass)}
+.chart .bar.on{fill:var(--ink)}
+.chart .ln{fill:none;stroke:var(--brass);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart .dot{fill:var(--brass);stroke:var(--paper);stroke-width:2}
+.chart .xh{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 3}
+.chart .xh[hidden]{display:none}
+.chart .hit{fill:transparent;cursor:pointer}
+.chart .hit.cur{fill:rgba(38,33,32,.04)}
+.chart .tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:11.5px;line-height:1.5;padding:6px 10px;border-radius:6px;white-space:nowrap;box-shadow:0 4px 12px rgba(38,33,32,.2)}
+.chart .tip b{font-family:var(--latin);font-size:15px;font-weight:500}
+.vs .kv{grid-template-columns:1fr;gap:0}
+.vs .kv dt{font-size:11px;padding-top:8px}
+.vs .kv dd{font-size:13.5px;line-height:1.65}
+.tile b small{display:inline;font-size:14px}

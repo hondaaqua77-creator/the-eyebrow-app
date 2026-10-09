@@ -1,4 +1,4 @@
-/* THE EYEBROW スタッフ専用アプリ v4.0（ホーム・予約・業務・資料・連絡） */
+/* THE EYEBROW スタッフ専用アプリ v5.0（ホーム・予約・カルテ・業務・売上・資料・連絡） */
 (function () {
   'use strict';
   const API = window.EB_CONFIG.API_URL;
@@ -60,7 +60,7 @@
       } catch (e) { auth = null; vLogin('通信できませんでした。電波の良い場所でお試しください', name); }
     };
   }
-  function logout() { auth = null; F = null; store.del('auth'); store.del('feed'); route = 'home'; vLogin(); }
+  function logout() { auth = null; F = null; KS.clear(); store.del('auth'); store.del('feed'); route = 'home'; vLogin(); }
 
   /* ---------- 画面切替 ---------- */
   document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g && auth) { const k = g.dataset.go; route = GROUPS[k] ? (lastSub[k] || GROUPS[k].subs[0][0]) : k; render(); window.scrollTo(0, 0); } });
@@ -74,16 +74,16 @@
   }
   // タブ（下のナビ）と、各タブの中の切り替え
   const GROUPS = {
-    rsv: { title: '予約', subs: [['today', '本日の予約'], ['slots', '空き状況']] },
-    work: { title: '業務', subs: [['time', '勤怠'], ['shift', 'シフト'], ['check', 'チェック'], ['report', '日報'], ['stock', '備品']] },
+    rsv: { title: '予約・カルテ', subs: [['today', '本日の予約'], ['karte', 'カルテ'], ['slots', '空き状況']] },
+    work: { title: '業務', subs: [['time', '勤怠'], ['shift', 'シフト'], ['check', 'チェック'], ['report', '日報'], ['stock', '備品'], ['dash', '売上', 'mgr']] },
     docs: { title: '資料', subs: [['video', '研修'], ['manual', 'マニュアル'], ['menu', 'メニュー'], ['info', 'お店']] }
   };
-  const ALIAS = { order: 'stock', skill: 'video' }; // 画面の中の切り替え（備品＝在庫・発注、研修＝動画・技術チェック）
+  const ALIAS = { order: 'stock', skill: 'video', kdetail: 'karte' }; // 画面の中の切り替え（備品＝在庫・発注、研修＝動画・技術チェック）
   const groupOf = r => { r = ALIAS[r] || r; return Object.keys(GROUPS).find(g => GROUPS[g].subs.some(x => x[0] === r)) || r; };
   const lastSub = store.get('lastSub', {});
   function hdr(g) {
     const G = GROUPS[g];
-    return `<h1 class="ttl">${G.title}</h1><div class="seg sub">${G.subs.map(([k, l]) => `<button data-sub="${k}" class="${k === (ALIAS[route] || route) ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+    return `<h1 class="ttl">${G.title}</h1><div class="seg sub">${G.subs.filter(x => x[2] !== 'mgr' || isMgr()).map(([k, l]) => `<button data-sub="${k}" class="${k === (ALIAS[route] || route) ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   }
   view.addEventListener('click', e => { const b = e.target.closest('[data-sub]'); if (b) { route = b.dataset.sub; lastSub[groupOf(route)] = route; store.set('lastSub', lastSub); render(); window.scrollTo(0, 0); } });
   function render() {
@@ -92,7 +92,8 @@
     $('#who').textContent = `${auth.name}${isMgr() ? '（店長）' : ''}`;
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.go === groupOf(route)));
     if (!F) { view.innerHTML = '<div class="spin"></div>'; return; }
-    ({ home: vHome, today: vToday, slots: vSlots, time: vTime, shift: vShift, check: vCheck, report: vReport, stock: vStock, order: vOrder, video: vVideo, skill: vSkill, manual: vManual, menu: vMenu, info: vInfo, notice: vNotice, settings: vSettings }[route] || vHome)();
+    if (route === 'dash' && !isMgr()) route = 'time';
+    ({ home: vHome, today: vToday, slots: vSlots, time: vTime, shift: vShift, check: vCheck, report: vReport, stock: vStock, order: vOrder, video: vVideo, skill: vSkill, manual: vManual, menu: vMenu, info: vInfo, notice: vNotice, settings: vSettings, karte: vKarte, kdetail: vKDetail, dash: vDash }[route] || vHome)();
     badges();
   }
 
@@ -388,6 +389,7 @@
         <button class="card stat" data-sub="check" data-list="閉店"><span class="small muted">閉店チェック</span><span class="big">${pc.d}<small> / ${pc.all}</small></span><div class="progress"><i style="width:${pc.all ? pc.d / pc.all * 100 : 0}%"></i></div></button>
       </div>
       <button class="card stat" data-sub="report" style="margin-top:10px"><div class="row"><span><span class="small muted">今日の日報</span><br><b style="font-family:var(--mincho)">${myRep ? '入力済み' : 'まだ入力していません'}</b></span><span class="small muted">${myRep ? `施術${myRep.treatments}件　${yen(myRep.sales)}` : '閉店後に1分で入力'}</span></div></button>
+      ${isMgr() ? `<button class="card stat" data-sub="dash" style="margin-top:10px"><div class="row"><span><span class="small muted">店長のみ</span><br><b style="font-family:var(--mincho)">売上ダッシュボード</b></span><span class="small muted">月別の推移・リピート率</span></div></button>` : ''}
       <p class="small muted" style="margin-top:22px;text-align:right"><button class="linkbtn" data-go="settings">設定・ログアウト</button></p>`;
     view.querySelectorAll('[data-list]').forEach(b => b.addEventListener('click', () => { checkList = b.dataset.list; }, true));
     bindPunch();
@@ -610,7 +612,7 @@
       <p class="small muted">直した人と時刻は記録に残ります。</p>
       <button class="btn" id="t_go">保存する</button>${r && isMgr() ? '<button class="btn danger" id="t_del">この記録を消す</button>' : ''}<button class="btn ghost" data-close>やめる</button>`);
     const send = async extra => {
-      const body = Object.assign({ date: $('#t_d').value, in: $('#t_i').value, out: $('#t_o').value, break_min: +$('#t_b').value || 0, note: $('#t_m').value }, isMgr() ? { name: $('#t_n').value } : {}, extra || {});
+      const body = Object.assign({ date: $('#t_d').value, in: $('#t_i').value, out: $('#t_o').value, break_min: +$('#t_b').value || 0, note: $('#t_m').value }, isMgr() ? { target: $('#t_n').value } : {}, extra || {});
       const res = await call('staff_time_edit', body).catch(() => null);
       if (res && res.ok) { closeSheet(); toast(res.removed ? '消しました' : '保存しました'); load(); } else toast((res && res.message) || '保存できませんでした');
     };
@@ -827,7 +829,7 @@
         <button class="btn" id="c_go">記録する</button><button class="btn ghost" data-close>やめる</button>`);
       document.querySelectorAll('#sheet [data-cr]').forEach(b => b.onclick = () => { res = b.dataset.cr; document.querySelectorAll('#sheet [data-cr]').forEach(x => x.classList.toggle('on', x === b)); });
       $('#c_go').onclick = async () => {
-        const r = await call('staff_skill_save', { name: $('#c_n').value, skill: $('#c_s').value, result: res, comment: $('#c_c').value }).catch(() => null);
+        const r = await call('staff_skill_save', { target: $('#c_n').value, skill: $('#c_s').value, result: res, comment: $('#c_c').value }).catch(() => null);
         if (r && r.ok) { closeSheet(); toast('記録しました'); load(); } else toast((r && r.message) || '記録できませんでした');
       };
     };
@@ -835,6 +837,281 @@
       sheet(`<h1 class="ttl">技術の項目</h1><p class="small muted" style="margin-top:-8px">1行に1つ。</p><div class="field"><textarea id="sk_t" rows="8">${esc(skills.join('\n'))}</textarea></div><button class="btn" id="sk_go">保存する</button><button class="btn ghost" data-close>やめる</button>`);
       $('#sk_go').onclick = async () => { const r = await call('staff_skills_set', { skills: $('#sk_t').value.split('\n').map(x => x.trim()).filter(Boolean) }).catch(() => null); if (r && r.ok) { closeSheet(); toast('保存しました'); load(); } else toast((r && r.message) || '保存できませんでした'); };
     };
+  }
+
+  /* ---------- お客様カルテ ----------
+     個人情報なので、この端末には保存しない（画面を開いている間だけメモリに置く）。開くたびにサーバーから取得し、閲覧も記録される */
+  const KS = new Map(); // 'q:検索語' → 結果 / 'c:id' → カルテ / 'p:id' → 写真
+  let kQ = '', kId = '', kTimer = 0, kSeq = 0;
+  const kname = c => esc(c.name) + (c.kana ? `<small class="kana">${esc(c.kana)}</small>` : '');
+  const telFmt = t => { t = String(t || ''); return t.length === 11 ? t.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3') : t.length === 10 ? t.replace(/(\d{2,3})(\d{3,4})(\d{4})/, '$1-$2-$3') : t; };
+  function vKarte() {
+    view.innerHTML = `${hdr('rsv')}
+      <div class="ksearch"><input id="k_q" type="search" enterkeyhint="search" placeholder="お名前・ふりがな・電話番号で検索" value="${esc(kQ)}" autocomplete="off"></div>
+      <div id="k_res"><div class="spin"></div></div>
+      <button class="fab" id="k_new">新しいカルテ</button>
+      <p class="small muted" style="margin-top:16px">カルテを開いた人・時刻はすべて記録されます。お客様の情報は、この端末には保存されません。</p>
+      ${isMgr() ? '<button class="btn ghost" id="k_log" style="margin-top:6px">閲覧・変更の記録を見る（店長のみ）</button>' : ''}`;
+    const q = $('#k_q');
+    q.oninput = () => { clearTimeout(kTimer); kTimer = setTimeout(() => { kQ = q.value.trim(); kSearch(); }, 400); };
+    q.onkeydown = e => { if (e.key === 'Enter') { clearTimeout(kTimer); kQ = q.value.trim(); kSearch(); q.blur(); } };
+    $('#k_new').onclick = () => editKarte(null);
+    const lg = $('#k_log'); if (lg) lg.onclick = karteLog;
+    kSearch();
+  }
+  async function kSearch() {
+    const box = $('#k_res'); if (!box) return;
+    const key = 'q:' + kQ, seq = ++kSeq;
+    const draw = rows => {
+      if (seq !== kSeq || !$('#k_res')) return;
+      $('#k_res').innerHTML = `<h2 class="sec">${kQ ? `「${esc(kQ)}」の検索結果` : '最近来店したお客様'}</h2>` + (rows.length ? rows.map(c => `<button class="card kc" data-kid="${esc(c.id)}">
+        <span class="nm"><b>${kname(c)}</b></span><span class="small muted">${c.visits ? `来店 ${c.visits}回・前回 ${esc(fmtDate(c.last))}` : '来店記録なし'}</span></button>`).join('')
+        : `<div class="card empty">${kQ ? '見つかりませんでした。右下の「新しいカルテ」から作成できます' : 'カルテはまだありません'}</div>`);
+      $('#k_res').querySelectorAll('[data-kid]').forEach(b => b.onclick = () => openKarte(b.dataset.kid));
+    };
+    if (KS.has(key)) draw(KS.get(key)); else box.innerHTML = '<div class="spin"></div>';
+    const r = await call('staff_karte_search', { q: kQ }).catch(() => null);
+    if (r && r.ok) { KS.set(key, r.rows); draw(r.rows); }
+    else if (seq === kSeq && !KS.has(key) && $('#k_res')) $('#k_res').innerHTML = `<div class="card empty">${esc((r && r.message) || '通信できませんでした')}</div>`;
+  }
+  function openKarte(id) { kId = id; route = 'kdetail'; render(); window.scrollTo(0, 0); }
+  async function fetchKarte(id) {
+    const r = await call('staff_karte_get', { id }).catch(() => null);
+    if (r && r.ok) { KS.set('c:' + id, r.customer); return r.customer; }
+    toast((r && r.message) || '読み込めませんでした'); return null;
+  }
+  async function vKDetail() {
+    const back = `<button class="back" data-sub="karte">‹ カルテ一覧</button>`;
+    let c = KS.get('c:' + kId);
+    if (!c) { view.innerHTML = back + '<div class="spin"></div>'; c = await fetchKarte(kId); if (route !== 'kdetail') return; if (!c) { view.innerHTML = back + '<div class="card empty">カルテを開けませんでした</div>'; return; } }
+    view.innerHTML = `${back}
+      <div class="khead"><h1 class="ttl">${esc(c.name)}<span class="sama">様</span>${c.kana ? `<small class="kana">${esc(c.kana)}</small>` : ''}</h1>
+        <div class="small muted">${c.tel ? `<a href="tel:${esc(c.tel)}">${esc(telFmt(c.tel))}</a>　` : ''}来店 ${c.visits.length}回${c.visits[0] ? '・前回 ' + esc(fmtDate(c.visits[0].date)) : ''}</div></div>
+      ${c.caution ? `<div class="warn"><b>注意事項</b><span style="white-space:pre-wrap">${esc(c.caution)}</span></div>` : ''}
+      <div class="card"><dl class="kv"><dt>写真の同意</dt><dd>${c.consent ? `<span class="res ok">同意あり</span> <span class="small muted">${esc(fmtDate(c.consent_at))}</span>` : '<span class="res ng">同意なし</span> <span class="small muted">写真は保存できません</span>'}</dd>
+        ${c.memo ? `<dt>メモ</dt><dd style="white-space:pre-wrap">${esc(c.memo)}</dd>` : ''}</dl>
+        <button class="btn ghost sm" id="k_edit">お客様の情報を編集</button></div>
+      <h2 class="sec">施術の履歴</h2>
+      ${c.visits.map(v => `<div class="card vs">
+        <div class="row"><b class="dt">${esc(fmtDate(v.date))}<small>${esc(v.date.slice(0, 4))}</small></b><span class="small muted">担当 ${esc(v.staff)}</span></div>
+        ${v.menu ? `<div class="mn">${esc(v.menu)}</div>` : ''}
+        <dl class="kv">${v.products ? `<dt>使用した薬剤・商品</dt><dd>${esc(v.products)}</dd>` : ''}${v.process ? `<dt>放置時間・工程</dt><dd>${esc(v.process)}</dd>` : ''}${v.memo ? `<dt>メモ</dt><dd>${esc(v.memo)}</dd>` : ''}${v.next ? `<dt>次回へ</dt><dd>${esc(v.next)}</dd>` : ''}</dl>
+        ${v.photos.length || c.consent ? `<div class="ph">${v.photos.map(p => `<button class="pt" data-pid="${esc(p.id)}" data-vid="${esc(v.id)}" aria-label="写真 ${esc(p.label)}"><img alt="" data-src="${esc(p.id)}">${p.label ? `<span>${esc(p.label)}</span>` : ''}</button>`).join('')}
+          ${c.consent && v.photos.length < 8 ? `<label class="pt add">＋写真<input type="file" accept="image/*" data-up="${esc(v.id)}" hidden></label>` : ''}</div>` : ''}
+        <div class="acts"><button class="linkbtn" data-ev="${esc(v.id)}">この記録を編集</button></div></div>`).join('') || '<div class="card empty">施術の履歴はまだありません</div>'}
+      <button class="fab" id="k_visit">施術を記録</button>
+      ${isMgr() ? '<button class="btn danger" id="k_del" style="margin-top:20px">このカルテを削除する（店長のみ）</button>' : ''}`;
+    $('#k_edit').onclick = () => editKarte(c);
+    $('#k_visit').onclick = () => editVisit(c, null);
+    view.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => editVisit(c, c.visits.find(v => v.id === b.dataset.ev)));
+    view.querySelectorAll('[data-up]').forEach(inp => inp.onchange = () => { if (inp.files[0]) uploadPhoto(c, inp.dataset.up, inp.files[0]); });
+    view.querySelectorAll('[data-pid]').forEach(b => b.onclick = () => viewPhoto(c, b.dataset.pid));
+    view.querySelectorAll('img[data-src]').forEach(loadThumb);
+    const d = $('#k_del');
+    if (d) d.onclick = async () => {
+      if (d.dataset.c !== '1') { d.dataset.c = '1'; d.textContent = 'もう一度押すと、履歴と写真もすべて削除します'; return; }
+      d.disabled = true; const r = await call('staff_karte_delete', { id: c.id }).catch(() => null);
+      if (r && r.ok) { KS.clear(); toast('カルテを削除しました'); route = 'karte'; render(); } else { d.disabled = false; toast((r && r.message) || '削除できませんでした'); }
+    };
+  }
+  async function photoData(id) {
+    if (KS.has('p:' + id)) return KS.get('p:' + id);
+    const r = await call('staff_photo_get', { id }).catch(() => null);
+    if (r && r.ok) { KS.set('p:' + id, r.data); return r.data; }
+    return '';
+  }
+  async function loadThumb(img) { const d = await photoData(img.dataset.src); if (d) { img.src = d; img.parentNode.classList.add('ok'); } }
+  async function viewPhoto(c, id) {
+    let vis = null, ph = null; c.visits.forEach(v => v.photos.forEach(p => { if (p.id === id) { vis = v; ph = p; } }));
+    if (!ph) return;
+    sheet(`<div class="small muted">${esc(fmtDate(vis.date))}　${esc(ph.label || '')}</div><div class="bigph"><div class="spin"></div></div>
+      ${isMgr() ? '<button class="btn danger" id="p_del">この写真を削除する（店長のみ）</button>' : ''}<button class="btn ghost" data-close style="margin-top:10px">閉じる</button>`);
+    const d = await photoData(id);
+    const box = document.querySelector('#sheet .bigph'); if (box) box.innerHTML = d ? `<img src="${d}" alt="">` : '<div class="empty">写真を読み込めませんでした</div>';
+    const del = $('#p_del');
+    if (del) del.onclick = async () => {
+      if (del.dataset.c !== '1') { del.dataset.c = '1'; del.textContent = 'もう一度押すと削除します'; return; }
+      del.disabled = true; const r = await call('staff_photo_delete', { id }).catch(() => null);
+      if (r && r.ok) { closeSheet(); toast('写真を削除しました'); KS.delete('p:' + id); await fetchKarte(c.id); render(); } else { del.disabled = false; toast('削除できませんでした'); }
+    };
+  }
+  // 写真は端末で長い辺1280pxのJPEGに縮めてから送る（通信量と保存容量を抑える）
+  function shrink(file) {
+    return new Promise((ok, ng) => {
+      const url = URL.createObjectURL(file), im = new Image();
+      im.onload = () => {
+        const k = Math.min(1, 1280 / Math.max(im.naturalWidth, im.naturalHeight));
+        const cv = document.createElement('canvas'); cv.width = Math.round(im.naturalWidth * k); cv.height = Math.round(im.naturalHeight * k);
+        cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+        ok(cv.toDataURL('image/jpeg', 0.82));
+      };
+      im.onerror = () => { URL.revokeObjectURL(url); ng(new Error('この画像は読み込めませんでした')); };
+      im.src = url;
+    });
+  }
+  function uploadPhoto(c, vid, file) {
+    let label = '施術後';
+    sheet(`<h1 class="ttl">写真を保存する</h1>
+      <div class="bigph"><div class="spin"></div></div>
+      <div class="field"><label>写真の種類</label><div class="seg" style="margin:0">${['施術前', '施術後', 'デザイン', 'その他'].map(l => `<button data-pl="${l}" class="${l === label ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+      <p class="small muted">写真はお店のGoogleドライブ（非公開のフォルダ）に保存され、このアプリからだけ見られます。</p>
+      <button class="btn" id="p_go" disabled>保存する</button><button class="btn ghost" data-close>やめる</button>`);
+    document.querySelectorAll('#sheet [data-pl]').forEach(b => b.onclick = () => { label = b.dataset.pl; document.querySelectorAll('#sheet [data-pl]').forEach(x => x.classList.toggle('on', x === b)); });
+    shrink(file).then(data => {
+      const box = document.querySelector('#sheet .bigph'); if (box) box.innerHTML = `<img src="${data}" alt="">`;
+      const go = $('#p_go'); go.disabled = false;
+      go.onclick = async () => {
+        go.disabled = true; go.textContent = '保存中…';
+        const r = await call('staff_photo_upload', { customer_id: c.id, visit_id: vid, data, label }).catch(() => null);
+        if (r && r.ok) { KS.set('p:' + r.photo.id, data); closeSheet(); toast('写真を保存しました'); await fetchKarte(c.id); if (route === 'kdetail') render(); }
+        else { go.disabled = false; go.textContent = '保存する'; toast((r && r.message) || '保存できませんでした'); }
+      };
+    }).catch(e => { closeSheet(); toast(e.message); });
+  }
+  function editKarte(c) {
+    const n = !c; c = c || {};
+    sheet(`<h1 class="ttl">${n ? '新しいカルテ' : 'お客様の情報'}</h1>
+      <div class="field"><label>お名前<em>必須</em></label><input id="k_n" maxlength="40" value="${esc(c.name || '')}" placeholder="例）山田 花子"></div>
+      <div class="field"><label>ふりがな</label><input id="k_k" maxlength="40" value="${esc(c.kana || '')}" placeholder="やまだ はなこ"></div>
+      <div class="field"><label>電話番号</label><input id="k_t" type="tel" inputmode="tel" maxlength="15" value="${esc(c.tel || '')}" placeholder="09012345678"></div>
+      <div class="field"><label>注意事項（肌が弱い・アレルギーなど）</label><textarea id="k_c" rows="3" maxlength="500" placeholder="施術の前に必ず目に入る場所に表示されます">${esc(c.caution || '')}</textarea></div>
+      <div class="field"><label>メモ（好み・会話など）</label><textarea id="k_m" rows="3" maxlength="1000">${esc(c.memo || '')}</textarea></div>
+      <div class="consent"><label class="check"><input type="checkbox" id="k_ok" ${c.consent ? 'checked' : ''}> 写真の保存に同意をいただいた</label>
+        <p class="small muted">お客様に「施術の記録として眉の写真をお店で保管します。外部には公開しません」とお伝えし、同意をいただいた場合だけオンにしてください。同意がないカルテには写真を保存できません。</p></div>
+      <button class="btn" id="k_go">${n ? 'カルテを作る' : '保存する'}</button><button class="btn ghost" data-close>やめる</button>`);
+    $('#k_go').onclick = async () => {
+      const cname = $('#k_n').value.trim(); if (!cname) return toast('お名前を入力してください');
+      $('#k_go').disabled = true;
+      const r = await call('staff_karte_save', { id: c.id || '', cname, kana: $('#k_k').value, tel: $('#k_t').value, caution: $('#k_c').value, memo: $('#k_m').value, consent: $('#k_ok').checked }).catch(() => null);
+      if (r && r.ok) { closeSheet(); [...KS.keys()].filter(k => k.startsWith('q:')).forEach(k => KS.delete(k)); toast(n ? 'カルテを作りました' : '保存しました'); await fetchKarte(r.id); openKarte(r.id); }
+      else { $('#k_go').disabled = false; toast((r && r.message) || '保存できませんでした'); }
+    };
+  }
+  function editVisit(c, v) {
+    const n = !v; v = v || { date: F.today || ymd(new Date()), staff: auth.name };
+    const staffs = [...new Set((F.staffList || []).concat([auth.name, v.staff]).filter(Boolean))];
+    const menus = ((SHOP && SHOP.menus) || []).map(m => m.name);
+    const last = c.visits[0];
+    sheet(`<h1 class="ttl">${n ? '施術を記録' : '施術の記録を編集'}</h1><p class="small muted" style="margin-top:-8px">${esc(c.name)} 様</p>
+      <div class="two"><div class="field"><label>日付</label><input id="v_d" type="date" value="${esc(v.date)}"></div>
+        <div class="field"><label>担当</label><select id="v_s">${staffs.map(s => `<option ${s === v.staff ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></div></div>
+      <div class="field"><label>メニュー</label><input id="v_m" list="v_ml" maxlength="80" value="${esc(v.menu || '')}"><datalist id="v_ml">${menus.map(m => `<option value="${esc(m)}">`).join('')}</datalist></div>
+      <div class="field"><label>使用した薬剤・商品</label><textarea id="v_p" rows="2" maxlength="300" placeholder="例）1剤：○○ / 2剤：○○ / ワックス：○○">${esc(v.products || '')}</textarea></div>
+      <div class="field"><label>放置時間・工程</label><textarea id="v_r" rows="2" maxlength="500" placeholder="例）1剤 8分 → 2剤 6分 → ティント 3分">${esc(v.process || '')}</textarea></div>
+      <div class="field"><label>メモ（仕上がり・肌の状態・会話）</label><textarea id="v_o" rows="3" maxlength="1500">${esc(v.memo || '')}</textarea></div>
+      <div class="field"><label>次回への申し送り</label><textarea id="v_n" rows="2" maxlength="500" placeholder="例）左眉尻をもう少し伸ばす。4週間後のご来店をおすすめ">${esc(v.next || '')}</textarea></div>
+      ${n && last && (last.products || last.process) ? '<button class="btn ghost sm" id="v_cp">前回の薬剤・工程をコピー</button>' : ''}
+      <button class="btn" id="v_go">${n ? '記録する' : '保存する'}</button><button class="btn ghost" data-close>やめる</button>
+      ${n && c.consent ? '<p class="small muted">写真は、記録したあとに履歴の「＋写真」から追加できます。</p>' : ''}`);
+    const cp = $('#v_cp'); if (cp) cp.onclick = () => { $('#v_p').value = last.products || ''; $('#v_r').value = last.process || ''; if (!$('#v_m').value) $('#v_m').value = last.menu || ''; };
+    $('#v_go').onclick = async () => {
+      $('#v_go').disabled = true;
+      const r = await call('staff_visit_save', { customer_id: c.id, id: v.id || '', date: $('#v_d').value, staff: $('#v_s').value, menu: $('#v_m').value, products: $('#v_p').value, process: $('#v_r').value, memo: $('#v_o').value, next: $('#v_n').value }).catch(() => null);
+      if (r && r.ok) { closeSheet(); [...KS.keys()].filter(k => k.startsWith('q:')).forEach(k => KS.delete(k)); toast(n ? '記録しました' : '保存しました'); await fetchKarte(c.id); if (route === 'kdetail') render(); }
+      else { $('#v_go').disabled = false; toast((r && r.message) || '保存できませんでした'); }
+    };
+  }
+  async function karteLog() {
+    sheet('<h1 class="ttl">閲覧・変更の記録</h1><div class="spin"></div>');
+    const r = await call('staff_karte_log').catch(() => null);
+    const rows = (r && r.ok && r.rows) || [];
+    $('#sheetBody').innerHTML = `<h1 class="ttl">閲覧・変更の記録</h1><p class="small muted" style="margin-top:-8px">新しい順に最大200件</p>
+      <div class="card"><table class="tbl"><thead><tr><th>日時</th><th>スタッフ</th><th>内容</th></tr></thead><tbody>${rows.map(x => `<tr><td>${esc(fmtDate(x.at))}</td><td>${esc(x.name)}</td><td>${esc(x.action)}<br><span class="small muted">${esc(x.detail)}</span></td></tr>`).join('') || '<tr><td colspan="3" class="muted">記録はありません</td></tr>'}</tbody></table></div>
+      <button class="btn ghost" data-close>閉じる</button>`;
+  }
+
+  /* ---------- 売上ダッシュボード（店長のみ） ---------- */
+  let dMonth = '', dTable = false;
+  const DS = {};
+  const man = n => { n = Number(n || 0); return n >= 10000 ? (Math.round(n / 1000) / 10).toLocaleString('ja-JP') + '万' : n.toLocaleString('ja-JP'); };
+  const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '—';
+  async function vDash() {
+    const t = F.today || ymd(new Date());
+    if (!dMonth) dMonth = t.slice(0, 7);
+    const key = dMonth;
+    if (!DS[key]) {
+      view.innerHTML = hdr('work') + '<div class="spin"></div>';
+      const r = await call('staff_dashboard', { month: key }).catch(() => null);
+      if (route !== 'dash' || dMonth !== key) return;
+      if (!r || !r.ok) { view.innerHTML = hdr('work') + `<div class="card empty">${esc((r && r.message) || '読み込めませんでした')}</div>`; return; }
+      DS[key] = r;
+    }
+    const d = DS[key], ms = d.monthly, cur = ms.find(x => x.month === key) || { total: 0, sales: 0, retail: 0, treatments: 0, nominations: 0, days: 0 };
+    const i = ms.indexOf(cur), prev = i > 0 ? ms[i - 1] : null;
+    const diff = prev && prev.total ? Math.round((cur.total - prev.total) / prev.total * 100) : null;
+    const k = d.karte;
+    const thisM = t.slice(0, 7), canNext = key < thisM;
+    const mLabel = m => `${+m.slice(5)}月`;
+    view.innerHTML = `${hdr('work')}
+      <div class="mnav"><button id="d_prev" aria-label="前の月">‹</button><b>${key.slice(0, 4)}年${+key.slice(5)}月</b><button id="d_next" aria-label="次の月" ${canNext ? '' : 'disabled'}>›</button></div>
+      <div class="tiles">
+        <div class="tile wide"><span>売上（施術＋物販）</span><b>${yen(cur.total)}</b><small>${diff == null ? '前月のデータなし' : `前月比 ${diff >= 0 ? '+' : ''}${diff}%`}　施術 ${yen(cur.sales)}／物販 ${yen(cur.retail)}</small></div>
+        <div class="tile"><span>施術数</span><b>${cur.treatments}<small> 件</small></b><small>営業 ${cur.days}日</small></div>
+        <div class="tile"><span>客単価</span><b>${cur.treatments ? yen(Math.round(cur.sales / cur.treatments)) : '—'}</b><small>施術売上 ÷ 施術数</small></div>
+        <div class="tile"><span>指名率</span><b>${pct(cur.nominations, cur.treatments)}</b><small>指名 ${cur.nominations}件</small></div>
+        <div class="tile"><span>リピート率</span><b>${pct(k.repeat90, k.customers90)}</b><small>直近90日 ${k.customers90}名中 ${k.repeat90}名</small></div>
+      </div>
+      <h2 class="sec">月別の売上<button class="linkbtn" id="d_tbl" style="float:right">${dTable ? 'グラフで見る' : '表で見る'}</button></h2>
+      <div class="card">${dTable ? `<table class="tbl"><thead><tr><th>月</th><th>施術数</th><th>指名率</th><th>売上</th></tr></thead><tbody>${ms.slice().reverse().map(m => `<tr><td>${m.month.slice(0, 4)}/${+m.month.slice(5)}</td><td>${m.treatments}</td><td>${pct(m.nominations, m.treatments)}</td><td>${yen(m.total)}</td></tr>`).join('')}</tbody></table>`
+        : barChart(ms.map(m => ({ k: m.month, l: mLabel(m.month), v: m.total, tip: `${m.month.slice(0, 4)}年${+m.month.slice(5)}月<br><b>${yen(m.total)}</b><br>施術 ${m.treatments}件・指名率 ${pct(m.nominations, m.treatments)}` })), key)}</div>
+      <h2 class="sec">${+key.slice(5)}月の日別売上</h2>
+      <div class="card">${d.daily.length ? lineChart(d.daily, key) : '<div class="empty">この月の日報はまだありません</div>'}</div>
+      <h2 class="sec">スタッフ別（${+key.slice(5)}月）</h2>
+      ${Object.keys(d.staff).length ? `<div class="card"><table class="tbl"><thead><tr><th>名前</th><th>出勤</th><th>施術</th><th>指名率</th><th>売上</th></tr></thead><tbody>${Object.entries(d.staff).sort((a, b) => (b[1].sales + b[1].retail) - (a[1].sales + a[1].retail)).map(([n, o]) => `<tr><td>${esc(n)}</td><td>${o.days}日</td><td>${o.treatments}</td><td>${pct(o.nominations, o.treatments)}</td><td>${yen(o.sales + o.retail)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">この月の日報はまだありません</div>'}
+      <p class="small muted" style="margin-top:14px">売上・施術数・指名はスタッフの「日報」から集計しています。リピート率は、カルテに施術の記録がある方のうち、直近90日に来店した方で2回以上来店している割合です（今月の新規カルテ ${k.newThisMonth}名）。</p>`;
+    $('#d_prev').onclick = () => { dMonth = addM(key, -1); vDash(); };
+    $('#d_next').onclick = () => { if (canNext) { dMonth = addM(key, 1); vDash(); } };
+    $('#d_tbl').onclick = () => { dTable = !dTable; vDash(); };
+    view.querySelectorAll('.chart').forEach(bindChart);
+  }
+  const addM = (m, n) => { const d = new Date(+m.slice(0, 4), +m.slice(5) - 1 + n, 1); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); };
+  function niceMax(v) { if (v <= 0) return 10000; const p = Math.pow(10, Math.floor(Math.log10(v))); const f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; }
+  function axisY(W, H, pl, pt, ph, max) {
+    let g = '';
+    const n = String(max)[0] === '2' ? 4 : 5; // 目盛りがきりのよい数字になるように
+    for (let i = 0; i <= n; i++) { const y = pt + ph - ph * i / n; g += `<line x1="${pl}" x2="${W}" y1="${y}" y2="${y}" class="gl${i ? '' : ' base'}"/><text x="${pl - 6}" y="${y + 3.5}" class="yl">${i ? man(max * i / n) : '0'}</text>`; }
+    return g;
+  }
+  // 棒グラフ：1色（真鍮）。選んでいる月だけ墨色にする。棒の上下左右を広めに触れるようにして、触れると数値が出る
+  function barChart(items, focus) {
+    const W = 340, H = 190, pl = 34, pt = 10, pb = 22, ph = H - pt - pb, n = items.length, cw = (W - pl) / n, bw = Math.min(16, cw - 6);
+    const max = niceMax(Math.max(...items.map(x => x.v)));
+    let s = axisY(W, H, pl, pt, ph, max);
+    items.forEach((x, i) => {
+      const h = x.v ? Math.max(2, ph * x.v / max) : 0, cx = pl + cw * i + cw / 2, y = pt + ph - h, r = Math.min(4, bw / 2, h);
+      if (h) s += `<path class="bar${x.k === focus ? ' on' : ''}" d="M${cx - bw / 2},${pt + ph}V${y + r}a${r},${r} 0 0 1 ${r},${-r}H${cx + bw / 2 - r}a${r},${r} 0 0 1 ${r},${r}V${pt + ph}Z"/>`;
+      if (i % 2 === (n - 1) % 2 || x.k === focus) s += `<text x="${cx}" y="${H - 6}" class="xl${x.k === focus ? ' on' : ''}">${x.l}</text>`;
+      s += `<rect class="hit" x="${pl + cw * i}" y="${pt}" width="${cw}" height="${ph + pb}" data-tip="${esc(x.tip)}" data-x="${cx}" data-y="${y}"/>`;
+    });
+    return `<div class="chart" role="img" aria-label="月別の売上の棒グラフ"><svg viewBox="0 0 ${W} ${H}">${s}</svg><div class="tip" hidden></div></div>`;
+  }
+  // 折れ線：日別の売上。日報のある日だけを点で結ぶ
+  function lineChart(days, month) {
+    const W = 340, H = 170, pl = 34, pt = 12, pb = 22, ph = H - pt - pb;
+    const last = new Date(+month.slice(0, 4), +month.slice(5), 0).getDate();
+    const X = dd => pl + 6 + (W - pl - 12) * (dd - 1) / (last - 1), max = niceMax(Math.max(...days.map(x => x.total)));
+    const Y = v => pt + ph - ph * v / max;
+    let s = axisY(W, H, pl, pt, ph, max);
+    [1, 10, 20, last].forEach(dd => { s += `<text x="${X(dd)}" y="${H - 6}" class="xl">${dd}日</text>`; });
+    const pts = days.map(x => ({ x: X(+x.date.slice(8)), y: Y(x.total), d: x }));
+    s += `<path class="ln" d="${pts.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join('')}"/>`;
+    s += `<line class="xh" x1="0" x2="0" y1="${pt}" y2="${pt + ph}" hidden/>`;
+    pts.forEach(p => { s += `<circle class="dot" cx="${p.x}" cy="${p.y}" r="4"/>`; });
+    pts.forEach((p, i) => { const a = i ? (p.x + pts[i - 1].x) / 2 : pl, b = i < pts.length - 1 ? (p.x + pts[i + 1].x) / 2 : W;
+      s += `<rect class="hit" x="${a}" y="${pt}" width="${b - a}" height="${ph + pb}" data-tip="${esc(`${+p.d.date.slice(5, 7)}/${+p.d.date.slice(8)}<br><b>${yen(p.d.total)}</b><br>施術 ${p.d.treatments}件`)}" data-x="${p.x}" data-y="${p.y}" data-xh="1"/>`; });
+    return `<div class="chart" role="img" aria-label="日別の売上の折れ線グラフ"><svg viewBox="0 0 ${W} ${H}">${s}</svg><div class="tip" hidden></div></div>`;
+  }
+  function bindChart(el) {
+    const svg = el.querySelector('svg'), tip = el.querySelector('.tip'), xh = el.querySelector('.xh');
+    const show = r => {
+      const k = svg.clientWidth / 340, x = +r.dataset.x * k, y = +r.dataset.y * k;
+      tip.innerHTML = r.dataset.tip; tip.hidden = false;
+      const w = tip.offsetWidth; tip.style.left = Math.max(0, Math.min(el.clientWidth - w, x - w / 2)) + 'px'; tip.style.top = Math.max(0, y - tip.offsetHeight - 10) + 'px';
+      if (xh && r.dataset.xh) { xh.setAttribute('x1', r.dataset.x); xh.setAttribute('x2', r.dataset.x); xh.removeAttribute('hidden'); }
+      el.querySelectorAll('.hit.cur').forEach(h => h.classList.remove('cur')); r.classList.add('cur');
+    };
+    el.querySelectorAll('.hit').forEach(r => { r.addEventListener('pointerenter', () => show(r)); r.addEventListener('click', () => show(r)); });
+    el.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { tip.hidden = true; if (xh) xh.setAttribute('hidden', ''); } });
   }
 
   function boot() { render(); load(); loadShop(); }

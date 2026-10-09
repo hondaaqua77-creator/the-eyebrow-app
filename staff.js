@@ -1,4 +1,4 @@
-/* THE EYEBROW スタッフ専用アプリ v2.0（社内連絡・備品発注・空き状況・研修動画・お店情報） */
+/* THE EYEBROW スタッフ専用アプリ v3.0（ホーム・予約・業務・資料・連絡） */
 (function () {
   'use strict';
   const API = window.EB_CONFIG.API_URL;
@@ -12,7 +12,7 @@
   };
   let auth = store.get('auth', null); // { name, pass, role }
   let F = store.get('feed', null);    // 最後に読み込んだ内容（電波が悪くても表示できるように）
-  let route = 'notice', orderTab = '依頼中', videoCat = 'すべて';
+  let route = 'home', orderTab = '依頼中', videoCat = 'すべて';
 
   async function call(action, extra) {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 30000);
@@ -60,25 +60,38 @@
       } catch (e) { auth = null; vLogin('通信できませんでした。電波の良い場所でお試しください', name); }
     };
   }
-  function logout() { auth = null; F = null; store.del('auth'); store.del('feed'); route = 'notice'; vLogin(); }
+  function logout() { auth = null; F = null; store.del('auth'); store.del('feed'); route = 'home'; vLogin(); }
 
   /* ---------- 画面切替 ---------- */
-  document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g && auth) { route = g.dataset.go; render(); window.scrollTo(0, 0); } });
+  document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g && auth) { const k = g.dataset.go; route = GROUPS[k] ? (lastSub[k] || GROUPS[k].subs[0][0]) : k; render(); window.scrollTo(0, 0); } });
   function badges() {
     if (!F) return;
     const un = F.notices.filter(n => !n.read).length;
     const pend = F.orders.filter(o => o.status === '依頼中').length;
     const todo = F.videos.filter(v => !v.done).length;
-    const set = (id, n) => { const b = $(id); b.hidden = !n; b.textContent = n; };
-    set('#bNotice', un); set('#bOrder', isMgr() ? pend : 0); set('#bVideo', todo);
+    const set = (id, n) => { const b = $(id); if (!b) return; b.hidden = !n; b.textContent = n; };
+    set('#bNotice', un); set('#bWork', isMgr() ? pend : 0); set('#bDocs', todo);
   }
+  // タブ（下のナビ）と、各タブの中の切り替え
+  const GROUPS = {
+    rsv: { title: '予約', subs: [['today', '本日の予約'], ['slots', '空き状況']] },
+    work: { title: '業務', subs: [['check', '開店・閉店'], ['report', '日報'], ['order', '備品発注']] },
+    docs: { title: '資料', subs: [['video', '研修動画'], ['manual', 'マニュアル'], ['menu', 'メニュー'], ['info', 'お店']] }
+  };
+  const groupOf = r => Object.keys(GROUPS).find(g => GROUPS[g].subs.some(x => x[0] === r)) || r;
+  const lastSub = store.get('lastSub', {});
+  function hdr(g) {
+    const G = GROUPS[g];
+    return `<h1 class="ttl">${G.title}</h1><div class="seg sub">${G.subs.map(([k, l]) => `<button data-sub="${k}" class="${k === route ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  }
+  view.addEventListener('click', e => { const b = e.target.closest('[data-sub]'); if (b) { route = b.dataset.sub; lastSub[groupOf(route)] = route; store.set('lastSub', lastSub); render(); window.scrollTo(0, 0); } });
   function render() {
     if (!auth) return vLogin();
     $('#tabs').hidden = false;
     $('#who').textContent = `${auth.name}${isMgr() ? '（店長）' : ''}`;
-    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.go === route));
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.go === groupOf(route)));
     if (!F) { view.innerHTML = '<div class="spin"></div>'; return; }
-    ({ notice: vNotice, order: vOrder, slots: vSlots, video: vVideo, shop: vShop, me: vShop }[route] || vNotice)();
+    ({ home: vHome, today: vToday, slots: vSlots, check: vCheck, report: vReport, order: vOrder, video: vVideo, manual: vManual, menu: vMenu, info: vInfo, notice: vNotice, settings: vSettings }[route] || vHome)();
     badges();
   }
 
@@ -128,7 +141,7 @@
   function vOrder() {
     const tabs = ['依頼中', '発注済', '納品済'];
     const list = F.orders.filter(o => orderTab === '納品済' ? (o.status === '納品済' || o.status === '取り下げ') : o.status === orderTab);
-    view.innerHTML = `<h1 class="ttl">備品発注</h1>
+    view.innerHTML = `${hdr('work')}
       <button class="btn" id="newO">備品を依頼する</button>
       <h2 class="sec">依頼の一覧</h2>
       <div class="seg">${tabs.map(t => `<button data-ot="${t}" class="${t === orderTab ? 'on' : ''}">${t === '納品済' ? '完了' : t}（${F.orders.filter(o => t === '納品済' ? (o.status === '納品済' || o.status === '取り下げ') : o.status === t).length}）</button>`).join('')}</div>
@@ -183,7 +196,7 @@
     const cats = ['すべて'].concat([...new Set(vs.map(v => v.category || 'その他'))]);
     const list = vs.filter(v => videoCat === 'すべて' || (v.category || 'その他') === videoCat);
     const done = vs.filter(v => v.done).length;
-    view.innerHTML = `<h1 class="ttl">研修動画</h1>
+    view.innerHTML = `${hdr('docs')}
       ${vs.length ? `<div class="card"><div class="row"><span class="small">あなたの受講状況</span><span class="price">${done} / ${vs.length}</span></div><div class="progress"><i style="width:${vs.length ? Math.round(done / vs.length * 100) : 0}%"></i></div></div>` : ''}
       ${cats.length > 2 ? `<div class="cats" style="margin-top:16px">${cats.map(c => `<button data-vc="${esc(c)}" class="${c === videoCat ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>` : '<div style="height:14px"></div>'}
       ${list.map(v => { const e = embedOf(v.url); return `<div class="card vd" data-v="${esc(v.id)}">
@@ -254,18 +267,18 @@
     throw new Error('通信できませんでした');
   }
   async function loadShop() {
-    try { const r = await getJSON({ api: 'app' }); if (r && r.ok) { SHOP = r; store.set('shop', SHOP); if (route === 'shop' || route === 'slots') render(); } } catch (e) {}
+    try { const r = await getJSON({ api: 'app' }); if (r && r.ok) { SHOP = r; store.set('shop', SHOP); if (['slots', 'menu', 'info', 'today', 'home'].includes(route)) render(); } } catch (e) {}
   }
 
   /* ---------- 空き状況 ---------- */
   let sDate = '', sMenu = '';
   const slotCache = {};
   function vSlots() {
-    if (!SHOP) { view.innerHTML = '<h1 class="ttl">空き状況</h1><div class="spin"></div>'; loadShop(); return; }
+    if (!SHOP) { view.innerHTML = hdr('rsv') + '<div class="spin"></div>'; loadShop(); return; }
     const days = []; const t0 = new Date(); t0.setHours(0, 0, 0, 0);
     for (let i = 0; i < Math.min(SHOP.maxDays || 60, 60); i++) { const d = new Date(t0); d.setDate(d.getDate() + i); days.push(d); }
     if (!sDate) { const nw = new Date(), late = nw.getHours() * 60 + nw.getMinutes() > toMin(SHOP.close || '19:00') - 60; sDate = ymd(days[late && days[1] ? 1 : 0]); }
-    view.innerHTML = `<h1 class="ttl">空き状況</h1>
+    view.innerHTML = `${hdr('rsv')}
       <div class="field"><label>メニュー（所要時間で入れる時間を表示）</label><select id="s_menu"><option value="">時間枠だけを見る（30分ごと）</option>${(SHOP.menus || []).map(m => `<option value="${esc(m.name)}" ${m.name === sMenu ? 'selected' : ''}>${esc(m.name)}（${m.min}分）</option>`).join('')}</select></div>
       <div class="days">${days.map(d => { const v = ymd(d), off = (SHOP.closedDays || []).includes(d.getDay());
         return `<button class="day ${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''} ${off ? 'off' : ''} ${v === sDate ? 'sel' : ''}" data-day="${v}" ${off ? 'disabled' : ''}><span class="m">${d.getMonth() + 1}月</span><span class="n">${d.getDate()}</span><span class="w">${WD[d.getDay()]}</span></button>`; }).join('')}</div>
@@ -299,35 +312,222 @@
     }
   }
 
-  /* ---------- お店（メニュー・クーポン・店舗情報・設定） ---------- */
-  let shopTab = 'メニュー';
-  function vShop() {
-    const tabs = ['メニュー', 'クーポン', '店舗情報', '設定'];
-    let body = '';
-    if (shopTab === '設定') {
-      body = `<div class="card"><dl class="kv"><dt>お名前</dt><dd>${esc(auth.name)}</dd><dt>権限</dt><dd>${isMgr() ? '店長（連絡・動画の追加、発注の処理ができます）' : 'スタッフ'}</dd></dl></div>
-        <button class="btn ghost" id="reload" style="margin-top:16px">最新の内容に更新する</button>
-        <button class="btn danger" id="out">ログアウトする</button>
-        <p class="small muted" style="margin-top:22px">お名前を変えたいときは、ログアウトしてから入り直してください。既読や受講の記録はお名前ごとに残ります。メニュー・クーポン・店舗情報は、スプレッドシートの「設定」シートで変更できます。</p>`;
-    } else if (!SHOP) { body = '<div class="spin"></div>'; loadShop(); }
-    else if (shopTab === 'メニュー') {
-      body = (SHOP.menus || []).map(m => `<div class="card"><div class="row" style="align-items:flex-start"><b style="font-family:var(--mincho);font-size:14.5px;line-height:1.55">${esc(m.name)}</b><span class="price">${yen(m.price)}</span></div>
-        <div class="small muted" style="margin-top:2px">約${m.min}分${m.cat ? '　' + esc(m.cat) : ''}</div>${m.desc ? `<div class="small" style="margin-top:8px">${esc(m.desc)}</div>` : ''}</div>`).join('') || '<div class="card empty">メニューが登録されていません</div>';
-    } else if (shopTab === 'クーポン') {
-      body = (SHOP.coupons || []).map(c => `<div class="card coupon" style="cursor:default"><span class="chip ${/新規/.test(c.target || '') ? 'new' : ''}">${esc(c.target || '全員')}</span>
-        <div class="t">${esc(c.title)}</div><div class="row"><span class="small muted">${esc(c.note || '')}${c.menu ? '<br>対象：' + esc(c.menu) : ''}</span><span class="price">${c.regular ? `<s>${yen(c.regular)}</s>` : ''}${yen(c.price)}</span></div></div>`).join('') || '<div class="card empty">クーポンは登録されていません</div>';
-    } else {
-      const i = SHOP.info || {};
-      const map = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(i.mapQuery || i.address || SHOP.shop);
-      body = `<div class="card"><dl class="kv"><dt>店名</dt><dd>${esc(SHOP.shop)}</dd><dt>住所</dt><dd>${esc(i.address || '')}</dd><dt>アクセス</dt><dd class="small">${esc(i.access || '')}</dd>
-        <dt>営業時間</dt><dd>${esc(i.hours || (SHOP.open + '〜' + SHOP.close))}</dd>${i.seats ? `<dt>設備</dt><dd>${esc(i.seats)}</dd>` : ''}${i.tel ? `<dt>電話</dt><dd><a href="tel:${esc(i.tel)}">${esc(i.tel)}</a></dd>` : ''}</dl>
-        <div class="links"><a class="btn ghost" href="${map}" target="_blank" rel="noopener">地図で見る</a><a class="btn ghost" href="https://salonboard.com/login/" target="_blank" rel="noopener">サロンボード</a></div></div>
-        ${(i.features || []).length ? `<h2 class="sec">こだわり</h2><div class="tags">${i.features.map(f => `<span class="chip">${esc(f)}</span>`).join('')}</div>` : ''}`;
+  /* ---------- 資料：メニュー（クーポン含む）・お店 ---------- */
+  function vMenu() {
+    if (!SHOP) { view.innerHTML = hdr('docs') + '<div class="spin"></div>'; loadShop(); return; }
+    const cps = SHOP.coupons || [];
+    view.innerHTML = `${hdr('docs')}
+      ${(SHOP.menus || []).map(m => `<div class="card"><div class="row" style="align-items:flex-start"><b style="font-family:var(--mincho);font-size:14.5px;line-height:1.55">${esc(m.name)}</b><span class="price">${yen(m.price)}</span></div>
+        <div class="small muted" style="margin-top:2px">約${m.min}分${m.cat ? '　' + esc(m.cat) : ''}</div>${m.desc ? `<div class="small" style="margin-top:8px">${esc(m.desc)}</div>` : ''}</div>`).join('') || '<div class="card empty">メニューが登録されていません</div>'}
+      ${cps.length ? `<h2 class="sec">クーポン</h2>` + cps.map(c => `<div class="card coupon" style="cursor:default"><span class="chip ${/新規/.test(c.target || '') ? 'new' : ''}">${esc(c.target || '全員')}</span>
+        <div class="t">${esc(c.title)}</div><div class="row"><span class="small muted">${esc(c.note || '')}${c.menu ? '<br>対象：' + esc(c.menu) : ''}</span><span class="price">${c.regular ? `<s>${yen(c.regular)}</s>` : ''}${yen(c.price)}</span></div></div>`).join('') : ''}
+      <p class="small muted" style="margin-top:16px">メニュー・クーポンはスプレッドシートの「設定」シートで変更できます。</p>`;
+  }
+  function vInfo() {
+    if (!SHOP) { view.innerHTML = hdr('docs') + '<div class="spin"></div>'; loadShop(); return; }
+    const i = SHOP.info || {};
+    const map = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(i.mapQuery || i.address || SHOP.shop);
+    view.innerHTML = `${hdr('docs')}<div class="card"><dl class="kv"><dt>店名</dt><dd>${esc(SHOP.shop)}</dd><dt>住所</dt><dd>${esc(i.address || '')}</dd><dt>アクセス</dt><dd class="small">${esc(i.access || '')}</dd>
+      <dt>営業時間</dt><dd>${esc(i.hours || (SHOP.open + '〜' + SHOP.close))}</dd>${i.seats ? `<dt>設備</dt><dd>${esc(i.seats)}</dd>` : ''}${i.tel ? `<dt>電話</dt><dd><a href="tel:${esc(i.tel)}">${esc(i.tel)}</a></dd>` : ''}</dl>
+      <div class="links"><a class="btn ghost" href="${map}" target="_blank" rel="noopener">地図で見る</a><a class="btn ghost" href="https://salonboard.com/login/" target="_blank" rel="noopener">サロンボード</a></div></div>
+      ${(i.features || []).length ? `<h2 class="sec">こだわり</h2><div class="tags">${i.features.map(f => `<span class="chip">${esc(f)}</span>`).join('')}</div>` : ''}`;
+  }
+  function vSettings() {
+    view.innerHTML = `<h1 class="ttl">設定</h1>
+      <div class="card"><dl class="kv"><dt>お名前</dt><dd>${esc(auth.name)}</dd><dt>権限</dt><dd>${isMgr() ? '店長（連絡・動画・マニュアルの編集、発注の処理、全員の日報の確認ができます）' : 'スタッフ'}</dd></dl></div>
+      <button class="btn ghost" id="reload" style="margin-top:16px">最新の内容に更新する</button>
+      <button class="btn danger" id="out">ログアウトする</button>
+      <button class="btn ghost" data-go="home" style="margin-top:10px">ホームに戻る</button>
+      <p class="small muted" style="margin-top:22px">お名前を変えたいときは、ログアウトしてから入り直してください。既読・受講・チェック・日報の記録はお名前ごとに残ります。</p>`;
+    $('#reload').onclick = () => { toast('更新しています'); load(); loadShop(); };
+    $('#out').onclick = logout;
+  }
+
+  /* ---------- 同期の状態（サロンボードと最後につながった時刻） ---------- */
+  function syncInfo() {
+    const at = [F.rsvSyncAt, F.blockSyncAt].filter(Boolean).sort().pop() || '';
+    if (!at) return { ok: false, at: '', label: 'まだ同期されていません' };
+    const ms = Date.now() - new Date(at.replace(' ', 'T') + '+09:00').getTime();
+    const min = Math.round(ms / 60000);
+    return { ok: min <= 30, at, min, label: min < 60 ? `${min}分前に同期` : min < 1440 ? `${Math.round(min / 60)}時間前に同期` : `${Math.round(min / 1440)}日前に同期` };
+  }
+  function syncBanner() {
+    const s = syncInfo();
+    if (s.ok) return '';
+    return `<div class="warn"><b>サロンボードとの同期が止まっています</b><span>${esc(s.label)}。予約と空き状況が古い可能性があります。店舗のパソコンでサロンボードにログインしてください。</span></div>`;
+  }
+
+  /* ---------- ホーム ---------- */
+  function vHome() {
+    const t = F.today || '';
+    const todays = (F.reservations || []).filter(r => r.date === t);
+    const now = new Date(), nowM = now.getHours() * 60 + now.getMinutes();
+    const next = todays.find(r => toMin(r.end) > nowM);
+    const un = F.notices.filter(n => !n.read);
+    const pinned = F.notices.filter(n => n.pinned).slice(0, 1);
+    const defs = F.checklist || {}, done = F.checks || [];
+    const prog = l => { const all = (defs[l] || []).length, d = done.filter(c => c.list === l).length; return { all, d }; };
+    const po = prog('開店'), pc = prog('閉店');
+    const myRep = (F.reports || []).find(r => r.date === t && r.name === auth.name);
+    const d = new Date();
+    view.innerHTML = `<div class="hello"><span class="date">${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}）</span><h1 class="ttl" style="margin:2px 0 0">${esc(auth.name)}さん、${d.getHours() < 11 ? 'おはようございます' : d.getHours() < 18 ? 'お疲れさまです' : '今日もお疲れさまでした'}</h1></div>
+      ${syncBanner()}
+      ${un.length ? `<button class="card nt unread" data-go="notice"><div class="meta"><span style="color:var(--brass)">未読の連絡 ${un.length}件</span></div><b>${esc(un[0].title)}</b><div class="body">${esc(un[0].body)}</div></button>`
+        : pinned.length ? `<button class="card nt" data-go="notice"><div class="meta"><span class="pin">固定</span></div><b>${esc(pinned[0].title)}</b></button>` : ''}
+      <h2 class="sec">本日の予約</h2>
+      <button class="card stat" data-sub="today"><div class="row"><span><span class="big">${todays.length}</span><span class="small muted"> 件</span></span>
+        <span class="small" style="text-align:right">${next ? `次は <b>${esc(next.start)}</b>　${esc(next.staff)}<br><span class="muted">${esc(next.text).slice(0, 24)}</span>` : todays.length ? '本日の予約はすべて終了' : '本日の予約はありません'}</span></div></button>
+      <h2 class="sec">今日の業務</h2>
+      <div class="grid2">
+        <button class="card stat" data-sub="check"><span class="small muted">開店チェック</span><span class="big">${po.d}<small> / ${po.all}</small></span><div class="progress"><i style="width:${po.all ? po.d / po.all * 100 : 0}%"></i></div></button>
+        <button class="card stat" data-sub="check" data-list="閉店"><span class="small muted">閉店チェック</span><span class="big">${pc.d}<small> / ${pc.all}</small></span><div class="progress"><i style="width:${pc.all ? pc.d / pc.all * 100 : 0}%"></i></div></button>
+      </div>
+      <button class="card stat" data-sub="report" style="margin-top:10px"><div class="row"><span><span class="small muted">今日の日報</span><br><b style="font-family:var(--mincho)">${myRep ? '入力済み' : 'まだ入力していません'}</b></span><span class="small muted">${myRep ? `施術${myRep.treatments}件　${yen(myRep.sales)}` : '閉店後に1分で入力'}</span></div></button>
+      <p class="small muted" style="margin-top:22px;text-align:right"><button class="linkbtn" data-go="settings">設定・ログアウト</button></p>`;
+    view.querySelectorAll('[data-list]').forEach(b => b.addEventListener('click', () => { checkList = b.dataset.list; }, true));
+  }
+
+  /* ---------- 予約：本日の予約 ---------- */
+  let rsvDay = 0;
+  function vToday() {
+    const t = F.today || '';
+    const dates = [t, (() => { const d = new Date(t + 'T00:00:00'); d.setDate(d.getDate() + 1); return ymd(d); })()];
+    const date = dates[rsvDay];
+    const list = (F.reservations || []).filter(r => r.date === date);
+    const staffs = [...new Set(list.map(r => r.staff))];
+    const now = new Date(), nowM = now.getHours() * 60 + now.getMinutes();
+    const s = syncInfo();
+    view.innerHTML = `${hdr('rsv')}
+      <div class="seg" style="margin-top:-4px">${['今日', '明日'].map((l, i) => `<button data-rd="${i}" class="${i === rsvDay ? 'on' : ''}">${l}（${(F.reservations || []).filter(r => r.date === dates[i]).length}件）</button>`).join('')}</div>
+      ${syncBanner()}
+      ${list.length ? list.map(r => { const past = rsvDay === 0 && toMin(r.end) <= nowM, cur = rsvDay === 0 && toMin(r.start) <= nowM && nowM < toMin(r.end);
+        return `<div class="card rv ${past ? 'past' : ''} ${cur ? 'now' : ''}"><div class="tm"><b>${esc(r.start)}</b><span>${esc(r.end)}</span></div>
+          <div class="bd"><div class="meta">${staffs.length > 1 || r.staff ? `<span class="chip">${esc(r.staff)}</span>` : ''}${cur ? '<span class="nowtag">施術中</span>' : ''}</div><div class="tx">${esc(r.text)}</div></div></div>`; }).join('')
+        : `<div class="card empty">${rsvDay === 0 ? '今日' : '明日'}の予約はありません</div>`}
+      <p class="small muted" style="margin-top:14px">サロンボードの予約表から自動で読み込んでいます（${esc(s.label)}）。お客様の詳しい情報はサロンボードで確認してください。</p>`;
+    view.querySelectorAll('[data-rd]').forEach(b => b.onclick = () => { rsvDay = +b.dataset.rd; vToday(); });
+  }
+
+  /* ---------- 業務：開店・閉店チェック ---------- */
+  let checkList = new Date().getHours() >= 16 ? '閉店' : '開店';
+  function vCheck() {
+    const defs = F.checklist || {};
+    const items = defs[checkList] || [];
+    const done = (F.checks || []).filter(c => c.list === checkList);
+    const by = it => done.find(c => c.item === it);
+    view.innerHTML = `${hdr('work')}
+      <div class="seg" style="margin-top:-4px">${['開店', '閉店'].map(l => { const n = (F.checks || []).filter(c => c.list === l).length; return `<button data-cl="${l}" class="${l === checkList ? 'on' : ''}">${l}（${n}/${(defs[l] || []).length}）</button>`; }).join('')}</div>
+      <div class="card checks">${items.map((it, i) => { const c = by(it); return `<label class="ck ${c ? 'on' : ''}"><input type="checkbox" data-ci="${i}" ${c ? 'checked' : ''}><span class="box"></span><span class="lb">${esc(it)}${c ? `<small>${esc(c.name)}　${esc(String(c.at).slice(11, 16))}</small>` : ''}</span></label>`; }).join('') || '<div class="empty">項目がありません</div>'}</div>
+      ${items.length && done.length === items.length ? `<p class="okline">${checkList}チェックがすべて完了しました</p>` : ''}
+      ${isMgr() ? '<button class="btn ghost" id="editCk" style="margin-top:16px">チェック項目を編集する</button>' : ''}
+      <p class="small muted" style="margin-top:14px">チェックした人と時刻が記録されます。毎日0時に新しい日のチェックに切り替わります。</p>`;
+    view.querySelectorAll('[data-cl]').forEach(b => b.onclick = () => { checkList = b.dataset.cl; vCheck(); });
+    view.querySelectorAll('[data-ci]').forEach(cb => cb.onchange = async () => {
+      const item = items[+cb.dataset.ci], on = cb.checked;
+      F.checks = (F.checks || []).filter(c => !(c.list === checkList && c.item === item));
+      if (on) F.checks.push({ list: checkList, item, name: auth.name, at: (F.today || '') + ' ' + new Date().toTimeString().slice(0, 8) });
+      vCheck();
+      const r = await call('staff_check', { list: checkList, item, done: on }).catch(() => null);
+      if (!r || !r.ok) { toast((r && r.message) || '記録できませんでした。もう一度お試しください'); load(true); }
+    });
+    const e = $('#editCk');
+    if (e) e.onclick = () => {
+      sheet(`<h1 class="ttl">チェック項目を編集</h1><p class="small muted" style="margin-top:-8px">1行に1項目ずつ入力してください。</p>
+        <div class="field"><label>開店</label><textarea id="ck_o" rows="8">${esc((defs['開店'] || []).join('\n'))}</textarea></div>
+        <div class="field"><label>閉店</label><textarea id="ck_c" rows="8">${esc((defs['閉店'] || []).join('\n'))}</textarea></div>
+        <button class="btn" id="ck_go">保存する</button><button class="btn ghost" data-close>やめる</button>`);
+      $('#ck_go').onclick = async () => {
+        const sp = v => v.split('\n').map(x => x.trim()).filter(Boolean);
+        $('#ck_go').disabled = true;
+        const r = await call('staff_check_items_set', { open: sp($('#ck_o').value), close: sp($('#ck_c').value) }).catch(() => null);
+        if (r && r.ok) { closeSheet(); toast('保存しました'); load(); } else { $('#ck_go').disabled = false; toast((r && r.message) || '保存できませんでした'); }
+      };
+    };
+  }
+
+  /* ---------- 業務：日報 ---------- */
+  let repMonth = '';
+  function vReport() {
+    const t = F.today || ymd(new Date());
+    const mine = (F.reports || []).filter(r => r.name === auth.name);
+    const cur = mine.find(r => r.date === t) || {};
+    let mgrHtml = '';
+    if (isMgr()) {
+      const months = [...new Set((F.reports || []).map(r => r.date.slice(0, 7)))].sort().reverse();
+      if (!repMonth) repMonth = months[0] || t.slice(0, 7);
+      const rows = (F.reports || []).filter(r => r.date.slice(0, 7) === repMonth);
+      const by = {};
+      rows.forEach(r => { const o = by[r.name] = by[r.name] || { days: 0, treatments: 0, sales: 0, nominations: 0, retail: 0 }; o.days++; ['treatments', 'sales', 'nominations', 'retail'].forEach(k => o[k] += r[k]); });
+      const tot = Object.values(by).reduce((a, o) => { ['treatments', 'sales', 'nominations', 'retail'].forEach(k => a[k] += o[k]); return a; }, { treatments: 0, sales: 0, nominations: 0, retail: 0 });
+      mgrHtml = `<h2 class="sec">月の集計（店長のみ）</h2>
+        ${months.length > 1 ? `<div class="cats">${months.map(m => `<button data-rm="${m}" class="${m === repMonth ? 'on' : ''}">${+m.slice(5)}月</button>`).join('')}</div>` : ''}
+        <div class="card"><div class="kpis"><div><span>売上</span><b>${yen(tot.sales + tot.retail)}</b><small>施術 ${yen(tot.sales)}／物販 ${yen(tot.retail)}</small></div><div><span>施術数</span><b>${tot.treatments}<small> 件</small></b><small>指名 ${tot.nominations}件</small></div></div></div>
+        ${Object.keys(by).length ? `<div class="card"><table class="tbl"><thead><tr><th>名前</th><th>出勤</th><th>施術</th><th>指名</th><th>売上</th></tr></thead><tbody>${Object.entries(by).sort((a, b) => b[1].sales - a[1].sales).map(([n, o]) => `<tr><td>${esc(n)}</td><td>${o.days}日</td><td>${o.treatments}</td><td>${o.nominations}</td><td>${yen(o.sales + o.retail)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+        ${rows.length ? `<h2 class="sec">${+repMonth.slice(5)}月の日報</h2>` + rows.map(r => `<div class="card rp"><div class="row"><b>${+r.date.slice(5, 7)}/${+r.date.slice(8)}　${esc(r.name)}</b><span class="price">${yen(r.sales + r.retail)}</span></div><div class="small muted">施術${r.treatments}件・指名${r.nominations}件${r.retail ? '・物販' + yen(r.retail) : ''}</div>${r.memo ? `<div class="small" style="margin-top:6px;white-space:pre-wrap">${esc(r.memo)}</div>` : ''}</div>`).join('') : ''}`;
     }
-    view.innerHTML = `<h1 class="ttl">お店</h1><div class="seg">${tabs.map(t => `<button data-st="${t}" class="${t === shopTab ? 'on' : ''}">${t}</button>`).join('')}</div>${body}`;
-    view.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { shopTab = b.dataset.st; vShop(); });
-    const rl = $('#reload'); if (rl) rl.onclick = () => { toast('更新しています'); load(); loadShop(); };
-    const out = $('#out'); if (out) out.onclick = logout;
+    view.innerHTML = `${hdr('work')}
+      <div class="card"><div class="row" style="margin-bottom:12px"><b style="font-family:var(--mincho)">今日の日報</b><span class="small muted">${+t.slice(5, 7)}/${+t.slice(8)}${cur.id ? '　入力済み（上書きできます）' : ''}</span></div>
+        <div class="two"><div class="field"><label>施術した人数</label><input id="r_t" type="number" inputmode="numeric" min="0" max="99" value="${cur.treatments ?? ''}" placeholder="0"></div>
+          <div class="field"><label>うち指名</label><input id="r_n" type="number" inputmode="numeric" min="0" max="99" value="${cur.nominations ?? ''}" placeholder="0"></div></div>
+        <div class="two"><div class="field"><label>施術の売上（円）</label><input id="r_s" type="number" inputmode="numeric" min="0" value="${cur.sales ?? ''}" placeholder="0"></div>
+          <div class="field"><label>物販の売上（円）</label><input id="r_r" type="number" inputmode="numeric" min="0" value="${cur.retail ?? ''}" placeholder="0"></div></div>
+        <div class="field"><label>気づき・申し送り</label><textarea id="r_m" rows="3" maxlength="1000" placeholder="お客様の反応、困ったこと、明日への申し送りなど">${esc(cur.memo || '')}</textarea></div>
+        <button class="btn" id="r_go">${cur.id ? '日報を更新する' : '日報を送る'}</button></div>
+      ${!isMgr() && mine.length ? `<h2 class="sec">これまでの日報</h2>` + mine.slice(0, 31).map(r => `<div class="card rp"><div class="row"><b>${+r.date.slice(5, 7)}/${+r.date.slice(8)}</b><span class="price">${yen(r.sales + r.retail)}</span></div><div class="small muted">施術${r.treatments}件・指名${r.nominations}件</div></div>`).join('') : ''}
+      ${mgrHtml}`;
+    $('#r_go').onclick = async () => {
+      const v = id => $(id).value;
+      $('#r_go').disabled = true; $('#r_go').textContent = '送信中…';
+      const r = await call('staff_report_save', { date: t, treatments: v('#r_t'), nominations: v('#r_n'), sales: v('#r_s'), retail: v('#r_r'), memo: v('#r_m') }).catch(() => null);
+      if (r && r.ok) { toast(r.updated ? '日報を更新しました' : '日報を送りました'); load(); } else { $('#r_go').disabled = false; $('#r_go').textContent = '日報を送る'; toast((r && r.message) || '送れませんでした'); }
+    };
+    view.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { repMonth = b.dataset.rm; vReport(); });
+  }
+
+  /* ---------- 資料：マニュアル ---------- */
+  let manQ = '', manCat = 'すべて';
+  function vManual() {
+    const ms = F.manuals || [];
+    const cats = ['すべて'].concat([...new Set(ms.map(m => m.category || 'その他'))]);
+    const q = manQ.trim();
+    const list = ms.filter(m => (manCat === 'すべて' || (m.category || 'その他') === manCat) && (!q || (m.title + ' ' + m.body).includes(q)));
+    view.innerHTML = `${hdr('docs')}
+      <div class="field" style="margin-bottom:12px"><input id="m_q" type="search" placeholder="キーワードで探す（例：放置時間）" value="${esc(manQ)}"></div>
+      ${cats.length > 2 ? `<div class="cats">${cats.map(c => `<button data-mc="${esc(c)}" class="${c === manCat ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>` : ''}
+      <div id="m_list">${list.map(m => `<button class="card nt" data-m="${esc(m.id)}"><div class="meta"><span>${esc(m.category || 'その他')}</span><span>更新 ${esc(fmtDate(m.updated_at))}</span></div><b>${esc(m.title)}</b><div class="body">${esc(m.body)}</div></button>`).join('') || '<div class="card empty">該当するマニュアルはありません</div>'}</div>
+      ${isMgr() ? '<button class="fab" id="newM">マニュアルを書く</button>' : ''}`;
+    const qi = $('#m_q'); qi.oninput = () => { manQ = qi.value; const pos = qi.selectionStart; vManual(); const n = $('#m_q'); n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} };
+    view.querySelectorAll('[data-mc]').forEach(b => b.onclick = () => { manCat = b.dataset.mc; vManual(); });
+    view.querySelectorAll('[data-m]').forEach(b => b.onclick = () => openManual(ms.find(x => x.id === b.dataset.m)));
+    const nm = $('#newM'); if (nm) nm.onclick = () => editManual(null);
+  }
+  function openManual(m) {
+    if (!m) return;
+    sheet(`<span class="meta small muted">${esc(m.category || 'その他')}　更新 ${esc(fmtDate(m.updated_at))}　${esc(m.author || '')}</span>
+      <h1 class="ttl" style="margin-top:6px">${esc(m.title)}</h1><div class="prose">${esc(m.body)}</div>
+      ${isMgr() ? '<button class="btn ghost" id="mEd" style="margin-top:20px">編集する</button><button class="btn danger" id="mDel">削除する</button>' : ''}
+      <button class="btn ghost" data-close style="margin-top:10px">閉じる</button>`);
+    const ed = $('#mEd'); if (ed) ed.onclick = () => editManual(m);
+    const d = $('#mDel');
+    if (d) d.onclick = async () => {
+      if (d.dataset.c !== '1') { d.dataset.c = '1'; d.textContent = 'もう一度押すと削除します'; return; }
+      d.disabled = true; const r = await call('staff_manual_delete', { id: m.id }).catch(() => null);
+      if (r && r.ok) { closeSheet(); toast('削除しました'); load(); } else { d.disabled = false; toast('削除できませんでした'); }
+    };
+  }
+  function editManual(m) {
+    const cats = [...new Set((F.manuals || []).map(x => x.category).concat(['薬剤', '施術', '接客', '予約', '衛生管理', 'その他']))];
+    sheet(`<h1 class="ttl">${m ? 'マニュアルを編集' : 'マニュアルを書く'}</h1>
+      <div class="field"><label>分類</label><input id="e_c" list="e_cl" maxlength="20" value="${esc(m ? m.category : '')}" placeholder="例）施術"><datalist id="e_cl">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+      <div class="field"><label>タイトル<em>必須</em></label><input id="e_t" maxlength="80" value="${esc(m ? m.title : '')}"></div>
+      <div class="field"><label>本文</label><textarea id="e_b" rows="12" maxlength="8000">${esc(m ? m.body : '')}</textarea></div>
+      <button class="btn" id="e_go">保存する</button><button class="btn ghost" data-close>やめる</button>`);
+    $('#e_go').onclick = async () => {
+      const title = $('#e_t').value.trim(); if (!title) return toast('タイトルを入力してください');
+      $('#e_go').disabled = true;
+      const r = await call('staff_manual_save', { id: m ? m.id : '', category: $('#e_c').value.trim() || 'その他', title, body: $('#e_b').value }).catch(() => null);
+      if (r && r.ok) { closeSheet(); toast('保存しました'); load(); } else { $('#e_go').disabled = false; toast((r && r.message) || '保存できませんでした'); }
+    };
   }
 
   function boot() { render(); load(); loadShop(); }

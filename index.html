@@ -17,7 +17,7 @@
 <body class="staff">
 <div id="app">
   <header class="top">
-    <button class="brand" data-go="notice" aria-label="社内連絡へ">
+    <button class="brand" data-go="home" aria-label="ホームへ">
       <span class="logo">THE EYEBROW</span>
       <span class="shop">Staff</span>
     </button>
@@ -27,11 +27,11 @@
   <main id="view"><div class="spin"></div></main>
 
   <nav class="tabs" id="tabs" hidden>
-    <button data-go="notice"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg><span>社内連絡</span><i class="badge" id="bNotice" hidden></i></button>
-    <button data-go="order"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7M12 11v10"/></svg><span>備品発注</span><i class="badge" id="bOrder" hidden></i></button>
-    <button data-go="slots"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M8.5 14.5l2 2 4-4"/></svg><span>空き状況</span></button>
-    <button data-go="video"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9v6l5-3z"/></svg><span>研修動画</span><i class="badge" id="bVideo" hidden></i></button>
-    <button data-go="shop"><svg viewBox="0 0 24 24"><path d="M4 10l1.5-5h13L20 10M4 10v10h16V10M4 10c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3"/><path d="M10 20v-4h4v4"/></svg><span>お店</span></button>
+    <button data-go="home"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/></svg><span>ホーム</span></button>
+    <button data-go="rsv"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>予約</span></button>
+    <button data-go="work"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5h6M8.5 10l1.5 1.5 3-3M8.5 15.5l1.5 1.5 3-3"/></svg><span>業務</span><i class="badge" id="bWork" hidden></i></button>
+    <button data-go="docs"><svg viewBox="0 0 24 24"><path d="M4 5.5C6 4.5 9 4.5 12 6c3-1.5 6-1.5 8-.5V19c-2-1-5-1-8 .5-3-1.5-6-1.5-8-.5z"/><path d="M12 6v13.5"/></svg><span>資料</span><i class="badge" id="bDocs" hidden></i></button>
+    <button data-go="notice"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg><span>連絡</span><i class="badge" id="bNotice" hidden></i></button>
   </nav>
 
   <div class="sheet" id="sheet" hidden><div class="sheet-bg" data-close></div><div class="sheet-body" id="sheetBody"></div></div>

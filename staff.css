@@ -57,3 +57,49 @@ body.staff .top .logo{color:var(--bg)}
 .slots button.open{color:var(--ink);background:var(--paper);border:1px solid var(--ink-2)}
 .slots button:disabled:not(.open){color:#c9c3bd;background:transparent;border-style:dashed}
 .slots button.open:disabled{opacity:1}
+
+/* v3：ホーム・予約・チェック・日報 */
+.seg.sub{margin:-4px 0 18px}
+.hello .date{font-family:var(--latin);font-size:16px;color:var(--brass);letter-spacing:.04em}
+.warn{display:block;border:1px solid #e3c8c2;background:#f7ebe8;color:var(--ng);border-radius:var(--r);padding:12px 14px;margin:14px 0;font-size:12.5px;line-height:1.7}
+.warn b{display:block;font-size:13.5px;margin-bottom:2px}
+.stat{display:block;width:100%;text-align:left;cursor:pointer}
+.stat .big{display:block;font-family:var(--latin);font-weight:500;font-size:34px;line-height:1.1;font-variant-numeric:lining-nums}
+.stat .big small{font-size:18px;color:var(--muted)}
+.stat .row .big{display:inline}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid2 .card + .card{margin-top:0}
+.linkbtn{border:0;background:none;color:var(--muted);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;font-size:12.5px;padding:0}
+.rv{display:flex;gap:14px;align-items:flex-start}
+.rv .tm{min-width:52px;text-align:center;line-height:1.15;border-right:1px solid var(--line-2);padding-right:12px}
+.rv .tm b{display:block;font-family:var(--latin);font-weight:500;font-size:22px;font-variant-numeric:lining-nums}
+.rv .tm span{font-family:var(--latin);font-size:14px;color:var(--muted);font-variant-numeric:lining-nums}
+.rv .bd{flex:1;min-width:0}
+.rv .meta{display:flex;gap:6px;align-items:center;margin-bottom:4px}
+.rv .tx{font-size:14px;line-height:1.6;word-break:break-word}
+.rv.past{opacity:.45}
+.rv.now{border-color:var(--brass);box-shadow:inset 3px 0 0 var(--brass)}
+.nowtag{font-size:11px;color:#fff;background:var(--brass);border-radius:99px;padding:0 8px}
+.checks{padding:4px 16px}
+.ck{display:flex;gap:12px;align-items:flex-start;padding:13px 0;border-bottom:1px solid var(--line-2);cursor:pointer}
+.ck:last-child{border-bottom:0}
+.ck input{position:absolute;opacity:0;pointer-events:none}
+.ck .box{flex:none;width:22px;height:22px;border:1px solid var(--line);border-radius:6px;margin-top:1px;position:relative;background:var(--paper)}
+.ck.on .box{background:var(--ink);border-color:var(--ink)}
+.ck.on .box::after{content:"";position:absolute;left:7px;top:3px;width:6px;height:11px;border:solid var(--bg);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.ck input:focus-visible + .box{outline:2px solid var(--brass);outline-offset:2px}
+.ck .lb{font-size:14px;line-height:1.55}
+.ck.on .lb{color:var(--muted)}
+.ck .lb small{display:block;font-size:11px;color:var(--brass);margin-top:2px}
+.okline{text-align:center;font-family:var(--mincho);color:var(--ok);margin:16px 0 0;font-size:14px}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.kpis span{display:block;font-size:12px;color:var(--muted)}
+.kpis b{display:block;font-family:var(--latin);font-weight:500;font-size:26px;font-variant-numeric:lining-nums;line-height:1.2}
+.kpis b small{font-size:14px;color:var(--muted)}
+.kpis small{font-size:11.5px;color:var(--muted)}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{font-weight:600;color:var(--muted);font-size:11.5px;text-align:left;padding:0 6px 8px 0;border-bottom:1px solid var(--line-2)}
+.tbl td{padding:9px 6px 9px 0;border-bottom:1px solid var(--line-2);font-variant-numeric:tabular-nums}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td:last-child,.tbl th:last-child{text-align:right;padding-right:0}
+.rp .price{font-size:17px}

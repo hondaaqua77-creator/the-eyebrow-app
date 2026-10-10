@@ -1,4 +1,4 @@
-/* THE EYEBROW スタッフ専用アプリ v5.0（ホーム・予約・カルテ・業務・売上・資料・連絡） */
+/* THE EYEBROW スタッフ専用アプリ v5.1（ホーム・予約・カルテ・業務・売上・資料・連絡） */
 (function () {
   'use strict';
   const API = window.EB_CONFIG.API_URL;
@@ -14,8 +14,8 @@
   let F = store.get('feed', null);    // 最後に読み込んだ内容（電波が悪くても表示できるように）
   let route = 'home', orderTab = '依頼中', videoCat = 'すべて';
 
-  async function call(action, extra) {
-    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 30000);
+  async function call(action, extra, ms) {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms || 30000);
     try {
       const r = await fetch(API, { method: 'POST', body: JSON.stringify(Object.assign({ action, pass: auth && auth.pass, name: auth && auth.name }, extra || {})), signal: ctl.signal });
       const j = JSON.parse(await r.text());
@@ -237,22 +237,60 @@
     };
   }
   function composeVideo() {
+    let file = null, mode = 'file';
     sheet(`<h1 class="ttl">研修動画を追加</h1>
-      <p class="small muted" style="margin-top:-8px">YouTubeは「限定公開」、Googleドライブは「リンクを知っている全員が閲覧可」にしてからURLを貼ってください。</p>
-      <div class="field"><label>動画のURL<em>必須</em></label><input id="v_u" inputmode="url" placeholder="https://youtu.be/… または https://drive.google.com/file/d/…"></div>
+      <div class="seg" style="margin-top:-6px"><button data-vm="file" class="on">スマホの動画</button><button data-vm="url">URLを貼る</button></div>
+      <div id="v_fbox"><label class="vpick" id="v_pick"><input type="file" accept="video/*" id="v_f" hidden><b>動画を選ぶ・撮影する</b><span class="small muted">お店のGoogleドライブに保存されます（1GBまで）</span></label></div>
+      <div class="field" id="v_ubox" hidden><label>動画のURL<em>必須</em></label><input id="v_u" inputmode="url" placeholder="https://youtu.be/… または https://drive.google.com/file/d/…"><p class="small muted">YouTubeは「限定公開」、Googleドライブは「リンクを知っている全員が閲覧可」にしてから貼ってください。</p></div>
       <div class="field"><label>タイトル<em>必須</em></label><input id="v_t" maxlength="80" placeholder="例）HBL施術の流れ（基本）"></div>
       <div class="two"><div class="field"><label>分類</label><input id="v_c" list="v_cl" maxlength="20" placeholder="例）施術"><datalist id="v_cl">${[...new Set(F.videos.map(v => v.category).concat(['施術', '接客', 'カウンセリング', '衛生管理', 'サロンボード']))].map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
         <div class="field"><label>長さ（分）</label><input id="v_m" type="number" inputmode="numeric" min="0" max="600" placeholder="12"></div></div>
       <div class="field"><label>説明・見るポイント</label><textarea id="v_d" rows="4" maxlength="1000"></textarea></div>
-      <button class="btn" id="v_go">追加する</button><button class="btn ghost" data-close>やめる</button>`);
+      <div id="v_prog" hidden><div class="progress big"><i style="width:0%"></i></div><p class="small muted" id="v_pt"></p></div>
+      <button class="btn" id="v_go">追加する</button><button class="btn ghost" data-close id="v_cancel">やめる</button>`);
+    document.querySelectorAll('#sheet [data-vm]').forEach(b => b.onclick = () => { mode = b.dataset.vm; document.querySelectorAll('#sheet [data-vm]').forEach(x => x.classList.toggle('on', x === b)); $('#v_fbox').hidden = mode !== 'file'; $('#v_ubox').hidden = mode !== 'url'; });
+    $('#v_f').onchange = e => {
+      file = e.target.files[0]; if (!file) return;
+      $('#v_pick').innerHTML = `<b>${esc(file.name)}</b><span class="small muted">${(file.size / 1048576).toFixed(1)}MB　タップして選び直す</span>`; $('#v_pick').appendChild(e.target);
+      if (!$('#v_t').value) $('#v_t').value = file.name.replace(/\.[^.]+$/, '');
+      const vd = document.createElement('video'); vd.preload = 'metadata'; vd.onloadedmetadata = () => { if (isFinite(vd.duration) && !$('#v_m').value) $('#v_m').value = Math.max(1, Math.round(vd.duration / 60)); URL.revokeObjectURL(vd.src); }; vd.src = URL.createObjectURL(file);
+    };
     $('#v_go').onclick = async () => {
-      const url = $('#v_u').value.trim(), title = $('#v_t').value.trim();
-      if (!url || !title) return toast('URLとタイトルを入力してください');
-      if (!embedOf(url)) return toast('YouTube か Googleドライブ の動画URLを貼ってください');
+      let url = $('#v_u').value.trim(); const title = $('#v_t').value.trim();
+      if (!title) return toast('タイトルを入力してください');
+      if (mode === 'file') {
+        if (!file) return toast('動画を選んでください');
+        $('#v_go').disabled = true; $('#v_cancel').hidden = true;
+        url = await uploadVideo(file, title).catch(e => { toast(e.message); return ''; });
+        if (!url) { $('#v_go').disabled = false; $('#v_cancel').hidden = false; $('#v_go').textContent = 'もう一度送る'; return; }
+      } else {
+        if (!url) return toast('URLを入力してください');
+        if (!embedOf(url)) return toast('YouTube か Googleドライブ の動画URLを貼ってください');
+      }
       $('#v_go').disabled = true; $('#v_go').textContent = '追加中…';
       const r = await call('staff_video_add', { url, title, category: $('#v_c').value.trim() || 'その他', minutes: +$('#v_m').value || 0, description: $('#v_d').value }).catch(() => null);
-      if (r && r.ok) { closeSheet(); toast('追加しました'); load(); } else { $('#v_go').disabled = false; $('#v_go').textContent = '追加する'; toast((r && r.message) || '追加できませんでした'); }
+      if (r && r.ok) { closeSheet(); toast(mode === 'file' ? '追加しました。再生できるまで数分かかることがあります' : '追加しました'); load(); } else { $('#v_go').disabled = false; $('#v_go').textContent = '追加する'; toast((r && r.message) || '追加できませんでした'); }
     };
+  }
+  // 動画を4MBずつに分けて送る（電波が途切れても、その部分だけ送り直す）
+  async function uploadVideo(file, title) {
+    const bar = document.querySelector('#v_prog i'), txt = $('#v_pt'); $('#v_prog').hidden = false;
+    const show = (n, msg) => { bar.style.width = Math.round(n / file.size * 100) + '%'; txt.textContent = msg || `送信中… ${Math.round(n / file.size * 100)}%（${(n / 1048576).toFixed(1)} / ${(file.size / 1048576).toFixed(1)}MB）　この画面を閉じないでください`; };
+    show(0, '準備しています…');
+    const st = await call('staff_video_upload_start', { name: title, size: file.size, mime: file.type || 'video/mp4' }).catch(() => null);
+    if (!st || !st.ok) throw new Error((st && st.message) || '送信を始められませんでした');
+    const CH = st.chunk || 4194304;
+    const b64 = blob => new Promise((ok, ng) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1] || ''); fr.onerror = () => ng(new Error('動画を読み込めませんでした')); fr.readAsDataURL(blob); });
+    let off = 0;
+    while (off < file.size) {
+      const data = await b64(file.slice(off, Math.min(file.size, off + CH)));
+      let r = null;
+      for (let i = 0; i < 4 && !(r && r.ok); i++) { if (i) { show(off, `電波が不安定です。送り直しています（${i}回目）…`); await new Promise(z => setTimeout(z, 1500 * i)); } r = await call('staff_video_upload_chunk', { sid: st.sid, offset: off, data }, 180000).catch(() => null); if (r && !r.ok && !r.retry) break; }
+      if (!r || !r.ok) throw new Error((r && r.message) || '送信できませんでした。電波の良い場所でもう一度お試しください');
+      if (r.done) { show(file.size, '保存しました'); return r.url; }
+      off = r.next || off + CH; show(off);
+    }
+    throw new Error('送信が完了しませんでした');
   }
 
   /* ---------- 設定 ---------- */
@@ -322,10 +360,46 @@
     const cps = SHOP.coupons || [];
     view.innerHTML = `${hdr('docs')}
       ${(SHOP.menus || []).map(m => `<div class="card"><div class="row" style="align-items:flex-start"><b style="font-family:var(--mincho);font-size:14.5px;line-height:1.55">${esc(m.name)}</b><span class="price">${yen(m.price)}</span></div>
-        <div class="small muted" style="margin-top:2px">約${m.min}分${m.cat ? '　' + esc(m.cat) : ''}</div>${m.desc ? `<div class="small" style="margin-top:8px">${esc(m.desc)}</div>` : ''}</div>`).join('') || '<div class="card empty">メニューが登録されていません</div>'}
+        <div class="small muted" style="margin-top:2px">約${m.min}分${m.cat ? '　' + esc(m.cat) : ''}</div>${m.desc ? `<div class="small" style="margin-top:8px">${esc(m.desc)}</div>` : ''}
+        ${(() => { const ps = (F.menuPhotos || {})[m.name] || []; return ps.length || isMgr() ? `<div class="ph">${ps.map(p => `<button class="pt" data-mp="${esc(p.id)}" data-mn="${esc(m.name)}"><img alt="" data-mid="${esc(p.id)}">${p.label ? `<span>${esc(p.label)}</span>` : ''}</button>`).join('')}${isMgr() && ps.length < 12 ? `<label class="pt add">＋写真<input type="file" accept="image/*" data-mup="${esc(m.name)}" hidden></label>` : ''}</div>` : ''; })()}</div>`).join('') || '<div class="card empty">メニューが登録されていません</div>'}
       ${cps.length ? `<h2 class="sec">クーポン</h2>` + cps.map(c => `<div class="card coupon" style="cursor:default"><span class="chip ${/新規/.test(c.target || '') ? 'new' : ''}">${esc(c.target || '全員')}</span>
         <div class="t">${esc(c.title)}</div><div class="row"><span class="small muted">${esc(c.note || '')}${c.menu ? '<br>対象：' + esc(c.menu) : ''}</span><span class="price">${c.regular ? `<s>${yen(c.regular)}</s>` : ''}${yen(c.price)}</span></div></div>`).join('') : ''}
-      <p class="small muted" style="margin-top:16px">メニュー・クーポンはスプレッドシートの「設定」シートで変更できます。</p>`;
+      <p class="small muted" style="margin-top:16px">メニュー・クーポンはスプレッドシートの「設定」シートで変更できます。${isMgr() ? 'メニューの写真は「＋写真」から追加できます（お客様が写っている写真は、掲載の同意をいただいたものだけにしてください）。' : ''}</p>`;
+    loadMedia(view);
+    view.querySelectorAll('[data-mp]').forEach(b => b.onclick = () => {
+      const d = MC.get(b.dataset.mp); if (!d) return;
+      const lb = bigPhoto(d, isMgr() ? '<div class="lbacts"><button class="btn danger sm" id="mp_del">この写真を外す</button></div>' : '');
+      const del = lb.querySelector('#mp_del');
+      if (del) del.onclick = async () => {
+        if (del.dataset.c !== '1') { del.dataset.c = '1'; del.textContent = 'もう一度押すと外します'; return; }
+        const name = b.dataset.mn, list = ((F.menuPhotos || {})[name] || []).filter(p => p.id !== b.dataset.mp);
+        const r = await call('staff_menu_photos_set', { menu: name, photos: list }).catch(() => null);
+        if (r && r.ok) { call('staff_media_delete', { id: b.dataset.mp }).catch(() => {}); F.menuPhotos[name] = list; lb.remove(); toast('写真を外しました'); vMenu(); } else toast('操作できませんでした');
+      };
+    });
+    view.querySelectorAll('[data-mup]').forEach(inp => inp.onchange = async () => {
+      const f = inp.files[0], name = inp.dataset.mup; if (!f) return;
+      let label = '施術後';
+      sheet(`<h1 class="ttl">メニューの写真</h1><p class="small muted" style="margin-top:-8px">${esc(name)}</p><div class="bigph"><div class="spin"></div></div>
+        <div class="field"><label>写真の種類</label><div class="seg" style="margin:0">${['施術前', '施術後', 'ビフォーアフター', 'その他'].map(l => `<button data-pl="${l}" class="${l === label ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+        <label class="check"><input type="checkbox" id="mp_ok"> お客様が写っている場合、掲載の同意をいただいている</label>
+        <button class="btn" id="mp_go" disabled>追加する</button><button class="btn ghost" data-close>やめる</button>`);
+      document.querySelectorAll('#sheet [data-pl]').forEach(x => x.onclick = () => { label = x.dataset.pl; document.querySelectorAll('#sheet [data-pl]').forEach(y => y.classList.toggle('on', y === x)); });
+      let data;
+      try { data = await shrink(f); } catch (e) { closeSheet(); return toast(e.message); }
+      const bx = document.querySelector('#sheet .bigph'); if (bx) bx.innerHTML = `<img src="${data}" alt="">`;
+      const go = $('#mp_go'); go.disabled = false;
+      go.onclick = async () => {
+        if (!$('#mp_ok').checked) return toast('掲載の同意を確認して、チェックを入れてください');
+        go.disabled = true; go.textContent = '保存中…';
+        const r = await call('staff_media_upload', { data, purpose: 'menu', label: name }, 90000).catch(() => null);
+        if (!r || !r.ok) { go.disabled = false; go.textContent = '追加する'; return toast((r && r.message) || '保存できませんでした'); }
+        MC.set(r.id, data);
+        const list = ((F.menuPhotos = F.menuPhotos || {})[name] || []).concat([{ id: r.id, label }]);
+        const r2 = await call('staff_menu_photos_set', { menu: name, photos: list }).catch(() => null);
+        if (r2 && r2.ok) { F.menuPhotos[name] = list; store.set('feed', F); closeSheet(); toast('写真を追加しました'); vMenu(); } else { go.disabled = false; toast('保存できませんでした'); }
+      };
+    });
   }
   function vInfo() {
     if (!SHOP) { view.innerHTML = hdr('docs') + '<div class="spin"></div>'; loadShop(); return; }
@@ -492,6 +566,39 @@
     view.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { repMonth = b.dataset.rm; vReport(); });
   }
 
+  /* ---------- 写真（マニュアル・メニュー）：サーバーから取得して画面を開いている間だけ保持 ---------- */
+  const MC = new Map();
+  const MARK = /^\[\[写真:([\w-]+)\|?([^\]]*)\]\]$/;
+  const plainBody = b => String(b || '').split('\n').filter(l => !MARK.test(l.trim())).join('\n').replace(/^📷.*$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  function richBody(body) {
+    let html = '', buf = [];
+    const flush = () => { if (buf.length) { html += `<div class="prose">${esc(buf.join('\n'))}</div>`; buf = []; } };
+    String(body || '').split('\n').forEach(l => {
+      const t = l.trim(), m = t.match(MARK);
+      if (m) { flush(); html += `<figure class="mfig"><button class="mimg" data-big="${esc(m[1])}"><img alt="" data-mid="${esc(m[1])}"></button>${m[2] ? `<figcaption>${esc(m[2])}</figcaption>` : ''}</figure>`; }
+      else if (/^📷/.test(t)) { flush(); html += `<div class="mph">${esc(t.replace(/^📷\s*/, ''))}<small>撮影して差し替える写真</small></div>`; }
+      else buf.push(l);
+    });
+    flush();
+    return html;
+  }
+  async function loadMedia(root) {
+    if (!root) return;
+    const imgs = [...root.querySelectorAll('img[data-mid]')];
+    const need = [...new Set(imgs.map(i => i.dataset.mid).filter(id => !MC.has(id)))];
+    for (let i = 0; i < need.length; i += 6) {
+      const r = await call('staff_media_get', { ids: need.slice(i, i + 6) }).catch(() => null);
+      if (r && r.ok) Object.entries(r.data || {}).forEach(([k, v]) => MC.set(k, v));
+    }
+    imgs.forEach(img => { const d = MC.get(img.dataset.mid); if (d) { img.src = d; img.closest('.mimg,.pt') && img.closest('.mimg,.pt').classList.add('ok'); } else img.closest('.mimg,.pt') && img.closest('.mimg,.pt').classList.add('ng'); });
+    root.querySelectorAll('[data-big]').forEach(b => b.onclick = () => { const d = MC.get(b.dataset.big); if (d) bigPhoto(d); });
+  }
+  function bigPhoto(d, extra) {
+    const box = document.createElement('div'); box.className = 'lightbox'; box.innerHTML = `<img src="${d}" alt=""><button aria-label="閉じる">×</button>${extra || ''}`;
+    document.body.appendChild(box); box.onclick = e => { if (e.target === box || e.target.matches('button[aria-label]')) box.remove(); };
+    return box;
+  }
+
   /* ---------- 資料：マニュアル ---------- */
   let manQ = '', manCat = 'すべて';
   function vManual() {
@@ -502,7 +609,7 @@
     view.innerHTML = `${hdr('docs')}
       <div class="field" style="margin-bottom:12px"><input id="m_q" type="search" placeholder="キーワードで探す（例：放置時間）" value="${esc(manQ)}"></div>
       ${cats.length > 2 ? `<div class="cats">${cats.map(c => `<button data-mc="${esc(c)}" class="${c === manCat ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>` : ''}
-      <div id="m_list">${list.map(m => `<button class="card nt" data-m="${esc(m.id)}"><div class="meta"><span>${esc(m.category || 'その他')}</span><span>更新 ${esc(fmtDate(m.updated_at))}</span></div><b>${esc(m.title)}</b><div class="body">${esc(m.body)}</div></button>`).join('') || '<div class="card empty">該当するマニュアルはありません</div>'}</div>
+      <div id="m_list">${list.map(m => `<button class="card nt" data-m="${esc(m.id)}"><div class="meta"><span>${esc(m.category || 'その他')}</span><span>更新 ${esc(fmtDate(m.updated_at))}</span></div><b>${esc(m.title)}</b><div class="body">${esc(plainBody(m.body))}</div>${/\[\[写真:/.test(m.body) ? '<span class="hasph">写真あり</span>' : ''}</button>`).join('') || '<div class="card empty">該当するマニュアルはありません</div>'}</div>
       ${isMgr() ? '<button class="fab" id="newM">マニュアルを書く</button>' : ''}`;
     const qi = $('#m_q'); qi.oninput = () => { manQ = qi.value; const pos = qi.selectionStart; vManual(); const n = $('#m_q'); n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} };
     view.querySelectorAll('[data-mc]').forEach(b => b.onclick = () => { manCat = b.dataset.mc; vManual(); });
@@ -512,9 +619,10 @@
   function openManual(m) {
     if (!m) return;
     sheet(`<span class="meta small muted">${esc(m.category || 'その他')}　更新 ${esc(fmtDate(m.updated_at))}　${esc(m.author || '')}</span>
-      <h1 class="ttl" style="margin-top:6px">${esc(m.title)}</h1><div class="prose">${esc(m.body)}</div>
+      <h1 class="ttl" style="margin-top:6px">${esc(m.title)}</h1>${richBody(m.body)}
       ${isMgr() ? '<button class="btn ghost" id="mEd" style="margin-top:20px">編集する</button><button class="btn danger" id="mDel">削除する</button>' : ''}
       <button class="btn ghost" data-close style="margin-top:10px">閉じる</button>`);
+    loadMedia($('#sheetBody'));
     const ed = $('#mEd'); if (ed) ed.onclick = () => editManual(m);
     const d = $('#mDel');
     if (d) d.onclick = async () => {
@@ -529,7 +637,28 @@
       <div class="field"><label>分類</label><input id="e_c" list="e_cl" maxlength="20" value="${esc(m ? m.category : '')}" placeholder="例）施術"><datalist id="e_cl">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
       <div class="field"><label>タイトル<em>必須</em></label><input id="e_t" maxlength="80" value="${esc(m ? m.title : '')}"></div>
       <div class="field"><label>本文</label><textarea id="e_b" rows="12" maxlength="8000">${esc(m ? m.body : '')}</textarea></div>
+      <div class="edtools"><label class="btn ghost sm">写真を入れる<input type="file" accept="image/*" multiple id="e_ph" hidden></label><button class="btn ghost sm" id="e_pv">プレビュー</button></div>
+      <p class="small muted">写真は、本文で文字を入れている位置（カーソルの場所）に入ります。「📷」で始まる行は、撮影予定の写真の目印として点線の枠で表示されます。</p>
+      <div id="e_prev" hidden></div>
       <button class="btn" id="e_go">保存する</button><button class="btn ghost" data-close>やめる</button>`);
+    const ta = $('#e_b');
+    $('#e_ph').onchange = async e => {
+      const files = [...e.target.files]; e.target.value = '';
+      for (const f of files) {
+        toast('写真を保存しています…');
+        try {
+          const data = await shrink(f);
+          const r = await call('staff_media_upload', { data, purpose: 'manual' }, 90000).catch(() => null);
+          if (!r || !r.ok) { toast((r && r.message) || '写真を保存できませんでした'); continue; }
+          MC.set(r.id, data);
+          const pos = ta.selectionEnd || ta.value.length, before = ta.value.slice(0, pos), after = ta.value.slice(pos);
+          const ins = (before && !before.endsWith('\n') ? '\n' : '') + `[[写真:${r.id}|]]` + '\n';
+          ta.value = before + ins + after; ta.selectionStart = ta.selectionEnd = pos + ins.length;
+          toast('写真を入れました');
+        } catch (err) { toast(err.message); }
+      }
+    };
+    $('#e_pv').onclick = () => { const pv = $('#e_prev'); pv.hidden = !pv.hidden; if (!pv.hidden) { pv.innerHTML = `<div class="card">${richBody(ta.value)}</div>`; loadMedia(pv); } $('#e_pv').textContent = pv.hidden ? 'プレビュー' : 'プレビューを閉じる'; };
     $('#e_go').onclick = async () => {
       const title = $('#e_t').value.trim(); if (!title) return toast('タイトルを入力してください');
       $('#e_go').disabled = true;

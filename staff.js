@@ -277,7 +277,7 @@
     const bar = document.querySelector('#v_prog i'), txt = $('#v_pt'); $('#v_prog').hidden = false;
     const show = (n, msg) => { bar.style.width = Math.round(n / file.size * 100) + '%'; txt.textContent = msg || `送信中… ${Math.round(n / file.size * 100)}%（${(n / 1048576).toFixed(1)} / ${(file.size / 1048576).toFixed(1)}MB）　この画面を閉じないでください`; };
     show(0, '準備しています…');
-    const st = await call('staff_video_upload_start', { name: title, size: file.size, mime: file.type || 'video/mp4' }).catch(() => null);
+    const st = await call('staff_video_upload_start', { title, size: file.size, mime: file.type || 'video/mp4' }).catch(() => null);
     if (!st || !st.ok) throw new Error((st && st.message) || '送信を始められませんでした');
     const CH = st.chunk || 4194304;
     const b64 = blob => new Promise((ok, ng) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1] || ''); fr.onerror = () => ng(new Error('動画を読み込めませんでした')); fr.readAsDataURL(blob); });

@@ -1,5 +1,5 @@
 /* THE EYEBROW スタッフアプリ：通信できるときは常に最新を表示し、圏外のときだけ保存分を使う */
-const VER = 'eb-staff-v5.1.1';
+const VER = 'eb-staff-v5.1.2';
 const SHELL = ['./', 'index.html', 'style.css', 'staff.js', 'staff.css', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'cg-300.woff2', 'cg-500.woff2', 'cg-400i.woff2'];
 
 self.addEventListener('install', e => {
